@@ -1,0 +1,17 @@
+# Local sync config (per-maintainer).
+.sync-config.local.yml
+.sync-history/
+.sync-tmp/
+
+# Python tooling.
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editor / OS.
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
