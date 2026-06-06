@@ -1,0 +1,40 @@
+# Feature Execution Checkpoint
+# Written by feature-execution skill after each wave.
+# Read by SessionStart(compact) hook for context recovery.
+# Read by feature-execution Phase 1 to detect resume scenario.
+
+# NOTE for shared/OSS forks: add work/*/logs/checkpoint.yml to .gitignore.
+# This file contains runtime execution state (wave/task status, stall info)
+# and should not be committed to shared repositories.
+
+skill: feature-execution
+feature: {feature}
+feature_dir: work/{feature}
+execution_plan: work/{feature}/logs/execution-plan.md
+team_name: {feature}
+
+last_completed_wave: 0
+total_waves: 0
+
+# Format: task_number: status (planned | in_progress | done)
+# Example:
+#   1: done
+#   2: done
+#   3: in_progress
+#   4: planned
+tasks: {}
+
+next_wave: 1
+
+stall_state:
+  active: false               # bool — feature paused, awaiting auto-resume
+  reason: null                # "rate_limit" | "unknown" | null
+                              # Note: user-spec uses "rate_limit_exceeded"; canonical
+                              # value here is "rate_limit" — matches classify_claude_error()
+                              # return value directly. SessionStart.sh checks this exact string.
+  detected_at: null           # ISO-8601 timestamp
+  reset_at: null              # ISO-8601 (Retry-After if available, else +5h)
+  buffer_seconds: 60          # safety pad added to reset_at before resume
+  pending_teammates: []       # teammate names mid-task at stall
+  last_active_wave: null      # integer wave index for resume
+  resume_attempts: 0          # escalate to user after 3 failed attempts
