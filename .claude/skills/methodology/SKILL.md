@@ -188,17 +188,19 @@ work/{feature}/
 
 Completed features are archived to `work/completed/{feature}/`.
 
-### Global Structure `~/.claude/`
+### Project-Local Structure `.claude/`
 
 ```
-~/.claude/
+.claude/
 ├── skills/               # Skills (methodology, workflow, quality)
 ├── agents/               # Agents (validators, reviewers, creators)
 ├── commands/             # Slash commands
 ├── shared/               # Templates, scripts, interview plans
 ├── hooks/                # Automation hooks
-└── CLAUDE.md             # Global instructions
+└── CLAUDE.md             # Project instructions (checked into repo)
 ```
+
+All methodology assets are project-local — checked into the repository under `.claude/`. There is no global home-directory install.
 
 ---
 

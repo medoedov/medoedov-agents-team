@@ -28,7 +28,7 @@ find . -maxdepth 1 ! -name '.' ! -name '..' ! -name '.git' ! -name "$OLD_DIR" -e
 Copy template:
 
 ```bash
-cp -rp ~/.claude/shared/templates/new-project/. .
+cp -rp .claude/shared/templates/new-project/. .
 ```
 
 After copy:

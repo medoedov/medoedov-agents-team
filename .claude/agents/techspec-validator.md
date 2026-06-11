@@ -41,7 +41,7 @@ Read these files up front:
 - `{feature_path}/tasks/*.md` (via Glob — include in validation only if files exist)
 - `.claude/skills/project-knowledge/references/architecture.md` (if present)
 - `.claude/skills/project-knowledge/references/patterns.md` (if present)
-- `~/.claude/skills/tech-planning/references/skills-and-reviewers.md` (for task quality checks)
+- `.claude/skills/tech-planning/references/skills-and-reviewers.md` (for task quality checks)
 
 Run sections 1-9 (template compliance, fail-fast on structural issues), then sections 10-17
 (traceability and adequacy, which require both user-spec and tech-spec content). Each violation
@@ -107,7 +107,7 @@ Each task contains full information:
 - **Description** — what and why (scope description, not detailed implementation steps)
 - **Skill** — specified
 - **Reviewers** — specified, not empty. Each reviewer is an existing agent (verify via Glob:
-  `~/.claude/agents/{name}.md`)
+  `.claude/agents/{name}.md`)
 - **Verify-smoke** / **Verify-user** — present if task has external integration, infra, UI, or
   LLM work (see section 5b)
 - **Files to modify** — concrete file paths
@@ -126,14 +126,18 @@ If >15 tasks total — emit a finding recommending split into MVP + Extension.
 
 Go beyond field presence — check that task content is correct and appropriate for the tech-spec
 level. The authoritative skills and reviewers catalog is
-`~/.claude/skills/tech-planning/references/skills-and-reviewers.md`.
+`.claude/skills/tech-planning/references/skills-and-reviewers.md`.
 
 ### 8a. Skill Correctness
 
 - Each task's `Skill` value must match an entry from the Execution Skills table (`code-writing`,
   `infrastructure-setup`, `deploy-pipeline`, `documentation-writing`, `skill-master`,
   `pre-deploy-qa`, `post-deploy-qa`, `prompt-master`, `code-reviewing`, `security-auditor`,
-  `test-master`, `bug-hunter`). Unknown skill → severity `critical`.
+  `test-master`). Unknown skill → severity `critical`.
+- Bug Hunt tasks use `skills: []` and spawn the `bug-hunter` AGENT directly (it is an agent, not
+  a skill). A Bug Hunt task with `skills: [bug-hunter]` → severity `critical`: "bug-hunter is an
+  agent, not a skill. Use `skills: []` for Bug Hunt tasks — feature-execution spawns the
+  bug-hunter agent."
 - If a task description mentions writing or modifying LLM prompts (keywords: "prompt", "system
   prompt", "LLM prompt", "few-shot", "prompt template") but the task uses `code-writing` skill →
   severity `critical`: "Prompt task should use `prompt-master` skill, not `code-writing`."

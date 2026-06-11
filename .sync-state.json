@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_sync_at": "2026-06-11T05:15:16Z",
+  "last_sync_at": "2026-06-11T05:17:13Z",
   "files": [
     {
       "path": "CLAUDE.md",
@@ -9,10 +9,6 @@
     {
       "path": ".claude/consultant-base.md",
       "sha256": "c0847ff1abdcd3d03342ecd851472bc0fd889cf4722ab586cab466f0ca59aadd"
-    },
-    {
-      "path": ".claude/scheduled_tasks.lock",
-      "sha256": "523c7c805754024978915e53628e8c0815de5b40db867917dbc03d13d3261e60"
     },
     {
       "path": ".claude/team-lead.md",

@@ -28,7 +28,7 @@ If found:
 
 ```bash
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-cp ~/.claude/shared/interview-templates/skill.yml ~/.claude/tmp/interview-skill-$TIMESTAMP.yml
+cp .claude/shared/interview-templates/skill.yml .claude/tmp/interview-skill-$TIMESTAMP.yml
 ```
 
 Set `interview_metadata.started` to current timestamp.

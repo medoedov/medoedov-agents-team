@@ -339,7 +339,7 @@ notes: |
 # USAGE INSTRUCTIONS
 # ============================================================================
 #
-# 1. INIT: Created by init-feature-folder.sh at work/{feature}/logs/userspec/interview.yml
+# 1. INIT: Created by init-feature-folder.sh at work/{feature}/logs/interview.yml
 #    Set metadata.started, metadata.status: in_progress
 #
 # 2. INITIAL SCORING: After user's free-form description, score ALL items

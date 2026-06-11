@@ -18,7 +18,7 @@ Per-task validation only. Cross-task resource sharing and decomposition validati
 
 Inputs: `feature_path`, `task_numbers` (array), `batch_number` (default: 1), `iteration` (default: 1).
 
-1. Read `~/.claude/shared/work-templates/tasks/task.md.template` and `~/.claude/agents/task-creator.md`
+1. Read `.claude/shared/work-templates/tasks/task.md.template` and `.claude/agents/task-creator.md`
 2. Read each `{feature_path}/tasks/{N}.md` + context: `tech-spec.md`, `user-spec.md` (if exists)
 3. Validate against checklist; write report to `{feature_path}/logs/tasks/template-batch{batch_number}-review.json`
 Err on the side of flagging — false positive dismissed cheaply, false negative in artifact is expensive.

@@ -3,7 +3,7 @@ Start of Agent Team working session.
 Use for complex multi-day projects.
 
 Steps:
-1. Read work/backlog.md — incomplete tasks from the previous session
+1. If work/backlog.md exists, read it — incomplete tasks from the previous session; otherwise skip
 2. Read .claude/agent-memory/team-lead/MEMORY.md — improvement context (see "Historical IMPROVEMENT_LOG" section)
 3. Read the latest report from work/session-reports/
 4. Ask the user what to work on today

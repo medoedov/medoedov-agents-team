@@ -60,7 +60,7 @@ Team lead orchestrates feature delivery. You are a dispatcher: spawn agents, tra
 
    Build waves: group tasks by `wave` field. Within a wave, all tasks run in parallel.
 
-3. Build execution plan following template at `~/.claude/shared/work-templates/execution-plan.md.template`
+3. Build execution plan following template at `.claude/shared/work-templates/execution-plan.md.template`
 4. Save to `work/{feature}/logs/execution-plan.md`
 5. Show plan to user, wait for approval
 6. Create team via TeamCreate
@@ -97,7 +97,7 @@ Team lead orchestrates feature delivery. You are a dispatcher: spawn agents, tra
    Address any unread reviewer reports or messages. Do NOT idle with unprocessed messages.
 
    After task complete:
-   - Write entry to {feature_dir}/decisions.md (follow template at ~/.claude/shared/work-templates/decisions.md.template).
+   - Write entry to {feature_dir}/decisions.md (follow template at .claude/shared/work-templates/decisions.md.template).
      Summary: 1-3 sentences describing what was done and key decisions. Link JSON reports for review details.
    - Message team lead: "Task {N} complete. decisions.md updated."
 
@@ -226,7 +226,7 @@ When lead spawns an agent outside the original execution plan (to fix audit find
 
 ## Phase 3: Wave Transition
 
-1. Verify decisions.md entries exist and match template (`~/.claude/shared/work-templates/decisions.md.template`)
+1. Verify decisions.md entries exist and match template (`.claude/shared/work-templates/decisions.md.template`)
 2. If task had Smoke/User verification steps — confirm decisions.md Verification section includes results. Missing results without explanation → ask user whether to proceed.
 3. Update task frontmatter: `status: in_progress` → `status: done`
 4. Git commit: `chore: complete wave {N} — update task statuses and decisions`. Code is already committed by teammates.

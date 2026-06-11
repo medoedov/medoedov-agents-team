@@ -103,7 +103,7 @@ Status decision: `passed` if zero criticals, `failed` if one or more criticals.
 
 ### decisions.md entry — concise summary only
 
-Write a brief entry to decisions.md following the template (`~/.claude/shared/work-templates/decisions.md.template`). Link to `logs/working/qa-report.json` for the full report.
+Write a brief entry to decisions.md following the template (`.claude/shared/work-templates/decisions.md.template`). Link to `logs/working/qa-report.json` for the full report.
 
 Example:
 ```

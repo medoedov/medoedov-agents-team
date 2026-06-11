@@ -31,7 +31,7 @@ Create task file for the specified task from tech-spec.
 - files_to_modify: List of code files to modify (from tech-spec's Implementation Tasks)
 
 **Optional:**
-- template_path: Path to task template (default: `~/.claude/shared/work-templates/tasks/task.md.template`)
+- template_path: Path to task template (default: `.claude/shared/work-templates/tasks/task.md.template`)
 - files_to_read: List of code files to read for context (default: [])
 - depends_on: List of task dependency numbers (default: [])
 - wave: Wave number for parallel execution (default: 1)
@@ -87,7 +87,7 @@ Do NOT touch `task-files-map.yml` in fix mode — only `mode=create` writes it.
    - Description, What to do, TDD Anchor, Acceptance Criteria, Context Files, Verification Steps, Details, Reviewers, Post-completion: replace placeholder content with real content based on tech-spec and code analysis
    - For non-code tasks: delete TDD Anchor section entirely
 
-6. Upsert `work/{feature_path}/task-files-map.yml` — YAML mapping from task id (`T-001`, `T-002`, ...) to the list of files that task modifies.
+6. Upsert `{feature_path}/task-files-map.yml` — YAML mapping from task id (`T-001`, `T-002`, ...) to the list of files that task modifies.
    Source: this task's `files_to_modify` input. Task id format: `T-NNN` (zero-padded), derived from `task_number`.
    Behavior: **merge, do not overwrite.** Load the existing file if present (empty mapping if absent); upsert this task's entry (`T-NNN: [files...]`), preserving all other task entries; write back. Each per-task invocation contributes exactly its own entry.
    Why merge: `task-creator` is invoked per task, not once per decomposition. An overwrite would erase prior tasks' entries and silently break downstream file-overlap detection.

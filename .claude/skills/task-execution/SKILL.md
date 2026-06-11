@@ -27,7 +27,7 @@ Required:
 - Path to the task file: `work/{feature}/tasks/{task-id}.md`.
 
 Derived implicitly:
-- `feature_path` = parent of `tasks/` (e.g. `work/agent-system-v2-migration/`).
+- `feature_path` = parent of `tasks/` (e.g. `work/<feature-name>/`).
 - `task_id` = filename stem (e.g. `13` from `13.md`, or `T-007` from `T-007.md`).
 
 Read from task frontmatter (driven by `task-decomposition` schema):

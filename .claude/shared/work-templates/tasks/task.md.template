@@ -13,7 +13,7 @@ teammate_name:                     # косметическое имя тимм�
 ## Required Skills
 
 Перед выполнением задачи загрузи:
-- `/skill:code-writing` — [skills/code-writing/SKILL.md](~/.claude/skills/code-writing/SKILL.md)
+- `/skill:code-writing` — [skills/code-writing/SKILL.md](.claude/skills/code-writing/SKILL.md)
 
 ## Description
 
@@ -42,10 +42,10 @@ teammate_name:                     # косметическое имя тимм�
 - [user-spec.md](../user-spec.md)
 - [tech-spec.md](../tech-spec.md)
 - [decisions.md](../decisions.md)
-- [architecture.md](~/.claude/skills/project-knowledge/architecture.md)
-- [patterns.md](~/.claude/skills/project-knowledge/patterns.md)
-- [project.md](~/.claude/skills/project-knowledge/project.md)
-- [testing.md](~/.claude/skills/project-knowledge/testing.md)
+- [architecture.md](.claude/skills/project-knowledge/references/architecture.md)
+- [patterns.md](.claude/skills/project-knowledge/references/patterns.md)
+- [project.md](.claude/skills/project-knowledge/references/project.md)
+- [engineering-principles.md](.claude/skills/project-knowledge/references/engineering-principles.md)
 - [другие файлы по необходимости — БД, API, деплой, конкретные файлы кода]
 
 ## Verification Steps

@@ -24,14 +24,14 @@ Decompose tech-spec Implementation Tasks into individual task files with paralle
 
 3. Read `work/{feature}/user-spec.md`.
 
-4. Note the task template path: `~/.claude/shared/work-templates/tasks/task.md.template`
+4. Note the task template path: `.claude/shared/work-templates/tasks/task.md.template`
 
-5. Read skills/reviewers catalog from [skills-and-reviewers.md](~/.claude/skills/tech-planning/references/skills-and-reviewers.md) — for passing correct skills/reviewers to task-creators.
+5. Read skills/reviewers catalog from [skills-and-reviewers.md](.claude/skills/tech-planning/references/skills-and-reviewers.md) — for passing correct skills/reviewers to task-creators.
 
-6. For each task in Implementation Tasks — launch [`task-creator`](~/.claude/agents/task-creator.md) subagent in parallel.
+6. For each task in Implementation Tasks — launch [`task-creator`](.claude/agents/task-creator.md) subagent in parallel.
    Pass each task-creator:
    - feature_path, task_number, task_name
-   - template_path: `~/.claude/shared/work-templates/tasks/task.md.template`
+   - template_path: `.claude/shared/work-templates/tasks/task.md.template`
    - files_to_modify, files_to_read (from tech-spec)
    - depends_on, wave, skills, reviewers, verify (from tech-spec)
    - teammate_name (if specified in tech-spec, optional)
@@ -53,12 +53,12 @@ Tech-spec was already validated by 6 validators. This phase checks only: (1) tas
 
 Launch both in parallel:
 
-[`task-validator`](~/.claude/agents/task-validator.md) (sonnet) — Template Compliance + AC/TDD carry-forward:
+[`task-validator`](.claude/agents/task-validator.md) (sonnet) — Template Compliance + AC/TDD carry-forward:
 - Batch: 5 tasks per call
 - Pass: feature_path, task_numbers array, batch_number, iteration
 - Report: `logs/tasks/template-batch{N}-review.json`
 
-[`reality-checker`](~/.claude/agents/reality-checker.md) (sonnet) — Reality & Adequacy:
+[`reality-checker`](.claude/agents/reality-checker.md) (sonnet) — Reality & Adequacy:
 - Batch: 3 tasks per call
 - Pass: feature_path, task_numbers array, batch_number, iteration
 - Report: `logs/tasks/reality-batch{N}-review.json`
@@ -67,7 +67,7 @@ Launch both in parallel:
 
 1. Launch both validators in parallel (task-validator in batches of 5, reality-checker in batches of 3).
 2. Read JSON reports, collect findings.
-3. If issues found — for each task with issues, launch [`task-creator`](~/.claude/agents/task-creator.md) in fix mode:
+3. If issues found — for each task with issues, launch [`task-creator`](.claude/agents/task-creator.md) in fix mode:
    - Pass: same inputs as creation + `mode: fix` + `findings` from validators
    - task-creator reads existing task, applies fixes, overwrites file
 4. After each validation round, git commit: `chore(tasks): validation round {N} — {summary}`

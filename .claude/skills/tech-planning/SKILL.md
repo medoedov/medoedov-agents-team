@@ -63,7 +63,7 @@ Analyze if additional information is needed based on user-spec and code research
 
 1. Copy template to feature folder:
    ```bash
-   cp ~/.claude/shared/work-templates/tech-spec.md.template work/{feature}/tech-spec.md
+   cp .claude/shared/work-templates/tech-spec.md.template work/{feature}/tech-spec.md
    ```
    Then edit sections one by one using Edit tool. This keeps template structure and examples visible while you work.
 
@@ -99,7 +99,7 @@ Analyze if additional information is needed based on user-spec and code research
    - **Code Audit** (skill: `code-reviewing`) — holistic code quality review of all feature code
    - **Security Audit** (skill: `security-auditor`) — OWASP Top 10 across all components
    - **Test Audit** (skill: `test-master`) — test quality and coverage across all components
-   - **Bug Hunt** (skill: `bug-hunter`) — adversarial review: cross-reference API patterns, data flow failures, error UX. Add for size M/L or when feature has external API integrations (LLM providers, messaging platform, database, cache).
+   - **Bug Hunt** (agent: `bug-hunter`, `skills: []`) — adversarial review: cross-reference API patterns, data flow failures, error UX. Add for size M/L or when feature has external API integrations (LLM providers, messaging platform, database, cache). Note: `bug-hunter` is an agent, not a skill — set `skills: []` in the task and feature-execution spawns it directly.
 
    Auditors read all source files from the feature and write reports (analysis only). If issues found — feature-execution lead spawns a fixer agent, auditors become reviewers for the fix.
 

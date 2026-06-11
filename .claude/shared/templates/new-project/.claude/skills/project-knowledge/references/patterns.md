@@ -1,7 +1,7 @@
 # Patterns & Conventions
 
 Coding conventions, development workflow, and project-specific practices.
-For universal coding standards, see `~/.claude/skills/code-writing/references/universal-patterns.md`.
+For universal coding standards, see `.claude/skills/code-writing/references/universal-patterns.md`.
 
 ---
 
@@ -59,7 +59,7 @@ Rule of thumb: If unsure → use feature branch (safer).
 <!--
 SCALING HINT: If this section grows beyond ~60 lines, extract to references/testing.md.
 This section stores proven verification approaches discovered during development.
-Generic testing methodology lives in ~/.claude/skills/test-master/.
+Generic testing methodology lives in `.claude/skills/test-master/`.
 -->
 
 ### Test Infrastructure

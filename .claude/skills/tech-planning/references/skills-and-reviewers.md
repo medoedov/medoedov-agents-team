@@ -19,7 +19,7 @@ Used by: tech-planning (Phase 4), task-decomposition (Phase 1).
 | `code-reviewing` | Full-feature code quality audit | Code Audit in Audit Wave |
 | `security-auditor` | Full-feature security audit | Security Audit in Audit Wave |
 | `test-master` | Full-feature test quality audit | Test Audit in Audit Wave |
-| `bug-hunter` | Adversarial audit: API cross-reference, data flow failures, error UX | Bug Hunt in Audit Wave (M/L or external API) |
+| `bug-hunter` (agent) | Adversarial audit: API cross-reference, data flow failures, error UX | Bug Hunt in Audit Wave (M/L or external API) — spawn as agent with `skills: []` |
 
 Tasks without skill (user instructions) — skill not specified, description is in the task itself. Example: "ask user to register a bot in BotFather".
 
@@ -52,7 +52,7 @@ Prompt tasks (LLM system prompts, user templates) use `prompt-master` skill — 
 | `code-reviewing` | none — auditor IS the review (Audit Wave) |
 | `security-auditor` | none — auditor IS the review (Audit Wave) |
 | `test-master` | none — auditor IS the review (Audit Wave) |
-| `bug-hunter` | none — auditor IS the review (Audit Wave) |
+| `bug-hunter` (agent) | N/A — bug-hunter is an agent, not a skill. Spawn via feature-execution with `skills: []` |
 
 When `reviewers` field is empty in a task — fall back to the default set for that skill.
 

@@ -112,7 +112,7 @@ Follow code-reviewing methodology.
 
 ## Agent File Format
 
-Agent files use YAML frontmatter + Markdown body. Store in `~/.claude/agents/{name}.md`.
+Agent files use YAML frontmatter + Markdown body. Store in `.claude/agents/{name}.md`.
 
 ```yaml
 ---
@@ -281,9 +281,9 @@ Use `code-reviewer` subagent with:
 ## Example Agents
 
 See existing agents for full examples:
-- `~/.claude/agents/code-reviewer.md` — Detailed methodology with review dimensions
-- `~/.claude/agents/security-auditor.md` — OWASP-based security analysis
-- `~/.claude/agents/skill-checker.md` — Skill validation against standards
+- `.claude/agents/code-reviewer.md` — Detailed methodology with review dimensions
+- `.claude/agents/security-auditor.md` — OWASP-based security analysis
+- `.claude/agents/skill-checker.md` — Skill validation against standards
 
 ## References
 

@@ -1,6 +1,6 @@
 # Testing Guide for Code Writing
 
-Condensed testing rules for TDD workflow. For full testing strategy, see `~/.claude/skills/test-master/SKILL.md`.
+Condensed testing rules for TDD workflow. For full testing strategy, see `.claude/skills/test-master/SKILL.md`.
 
 ---
 

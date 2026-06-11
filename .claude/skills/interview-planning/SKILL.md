@@ -5,11 +5,10 @@ description: |
   gate, mandatory specialist checkpoints, smart routing, and unified validation.
 
   Primary trigger: /interview
-  Alias: /new-user-spec (compatibility)
 
   Use when: "сделай юзер спек", "проведи интервью для юзер спека",
   "создай юзерспек", "user spec", "detailed planning", "хочу продумать фичу",
-  "опиши требования к фиче", "сделай описание фичи", "/new-user-spec", "/interview"
+  "опиши требования к фиче", "сделай описание фичи", "/interview"
 
   For tech planning use tech-planning. For task decomposition use task-decomposition.
 ---
@@ -121,7 +120,7 @@ Phase 1 begins, using scores in the 60-80% range.
    Wait for explicit `yes` before invoking `init-feature-folder.sh`.
    On `no` — abort cleanly, no folder created (Scenario D protection).
    On `edit-name` — ask for the corrected name, then re-confirm.
-6. After `yes`: run `~/.claude/shared/scripts/init-feature-folder.sh {name}` — creates folder
+6. After `yes`: run `.claude/shared/scripts/init-feature-folder.sh {name}` — creates folder
    structure with `logs/interview.yml`.
 7. Update `logs/interview.yml`: set `metadata.started`, `metadata.status: in_progress`,
    `phase1_feature_overview.feature_name`, `phase1_feature_overview.work_type`. Write seeded
@@ -273,7 +272,7 @@ user-spec.md does not exist yet). Goal: gate ready-to-write.
 ### Phase 7: Create User Spec
 
 1. Copy template to working file:
-   - Copy `~/.claude/shared/work-templates/user-spec.md.template` → `work/{feature}/user-spec.md`
+   - Copy `.claude/shared/work-templates/user-spec.md.template` → `work/{feature}/user-spec.md`
    - Edit sections one by one using Edit tool, replacing placeholders with interview data.
    Reason: the agent sees the template structure and comments while editing each section,
    preventing drift from template format.

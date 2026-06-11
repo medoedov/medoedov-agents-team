@@ -18,7 +18,7 @@ Report what needs to be fixed.
 
 ## Input
 
-- path: Path to skill directory (e.g., `~/.claude/skills/my-skill`)
+- path: Path to skill directory (e.g., `.claude/skills/my-skill`)
 
 ## Process
 

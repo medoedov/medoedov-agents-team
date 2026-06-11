@@ -61,9 +61,10 @@ This is the T13 advisor-session class (3-hour stall after R2 PASS — reviewer
 clean but teammate did not move to commit + decisions.md update). Action:
 3-ping escalation protocol (next section).
 
-**S3 — No filesystem progress.** All three filesystem activity signals (git
+**S3 — No filesystem progress.** All four filesystem activity signals (git
 log mtime over `work/{feature}/`, `decisions.md` mtime, per-task
-`work/{feature}/logs/working/{task}/*.json` mtime) are older than 15 minutes
+`work/{feature}/logs/working/{task}/*.json` mtime, and audit-wave
+`work/{feature}/logs/tasks/*.json` mtime) are older than 15 minutes
 AND the teammate has no unread inbox messages. This is the "silent hang"
 case — neither writing files nor processing inbox. Action: 3-ping escalation
 protocol.
@@ -103,8 +104,7 @@ trips the git log mtime; a teammate that only writes a per-task review
 report trips the per-task JSON mtime; an audit-wave teammate writing an
 audit wave report to `logs/tasks/*.json` trips the tasks-log mtime.
 
-Windows mtime resolution is 100 ns, adequate for 5-minute sweep comparisons.
-No special handling needed for cross-platform sweeps.
+NTFS stores timestamps at 100 ns granularity, but filesystem/OS layers may round — treat sub-second equality conservatively; the 5-minute sweep window is unaffected.
 
 ## 3-ping escalation protocol
 
@@ -227,10 +227,10 @@ string.
 ERROR_MSG="$raw_error" python -c "
     import os, sys
     sys.path.insert(0, '.')
-    from <project_error_classifier_path> import classify_error, _redact_sensitive
+    from <project_error_classifier_path> import classify_claude_error, _redact_sensitive
     class _E(Exception):
         def __init__(self, m): self.message = m
-    result = classify_error(_E(os.environ['ERROR_MSG']))
+    result = classify_claude_error(_E(os.environ['ERROR_MSG']))
     print(result)"
 ```
 Replace `<project_error_classifier_path>` with the path documented in `patterns.md`.
@@ -276,7 +276,7 @@ not re-fire if `stall_state.active` is already true):
    `.claude/shared/work-templates/checkpoint.yml.template`:
    - `active: true`
    - `reason: "rate_limit"` — canonical value matching
-     `classify_error()` return. Not `"rate_limit_exceeded"` (the
+     `classify_claude_error()` return. Not `"rate_limit_exceeded"` (the
      user-spec informal description). `SessionStart.sh` checks the exact
      string `"rate_limit"`.
    - `detected_at`: current ISO-8601 timestamp in UTC.
@@ -331,5 +331,4 @@ classifies this as a known accepted theoretical risk on this basis.
   `stall_state.active == true`. The watchdog itself is scoped per-feature —
   one watchdog per `/do-all-tasks` invocation, monitoring only its own
   feature directory.
-- **Windows mtime resolution.** `os.path.getmtime()` on Windows has 100 ns
-  resolution, well below the 5-minute sweep window. No special handling.
+- **Windows mtime resolution.** NTFS stores timestamps at 100 ns granularity, but filesystem/OS layers may round — treat sub-second equality conservatively; the 5-minute sweep window is unaffected.

@@ -12,9 +12,8 @@
 #     tech-spec.md          (from template, if available)
 #     decisions.md          (from template or header)
 #     tasks/
-#     logs/userspec/
-#       interview.yml       (from template)
-#     logs/techspec/
+#     logs/
+#       interview.yml       (from template, flat path)
 #     logs/tasks/
 #     logs/working/
 #     logs/checkpoint.yml   (from template, for feature-execution recovery)
@@ -32,8 +31,9 @@ if [[ -z "$FEATURE_NAME" ]]; then
 fi
 
 # --- Paths ---
-TEMPLATES_DIR="$HOME/.claude/shared/work-templates"
-INTERVIEW_TEMPLATE="$HOME/.claude/shared/interview-templates/feature.yml"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEMPLATES_DIR="$SCRIPT_DIR/../work-templates"
+INTERVIEW_TEMPLATE="$SCRIPT_DIR/../interview-templates/feature.yml"
 FEATURE_DIR="$WORK_DIR/$FEATURE_NAME"
 TODAY=$(date +%Y-%m-%d)
 
@@ -50,8 +50,6 @@ fi
 
 # --- Create directory structure (mkdir -p is safe for existing dirs) ---
 mkdir -p "$FEATURE_DIR/tasks"
-mkdir -p "$FEATURE_DIR/logs/userspec"
-mkdir -p "$FEATURE_DIR/logs/techspec"
 mkdir -p "$FEATURE_DIR/logs/tasks"
 mkdir -p "$FEATURE_DIR/logs/working"
 
@@ -80,10 +78,10 @@ if [[ ! -f "$FEATURE_DIR/decisions.md" ]]; then
   fi
 fi
 
-# interview.yml (from template)
-if [[ ! -f "$FEATURE_DIR/logs/userspec/interview.yml" ]]; then
+# interview.yml (from template, flat path: logs/interview.yml)
+if [[ ! -f "$FEATURE_DIR/logs/interview.yml" ]]; then
   if [[ -f "$INTERVIEW_TEMPLATE" ]]; then
-    cp "$INTERVIEW_TEMPLATE" "$FEATURE_DIR/logs/userspec/interview.yml"
+    cp "$INTERVIEW_TEMPLATE" "$FEATURE_DIR/logs/interview.yml"
   else
     echo "Warning: interview template not found: $INTERVIEW_TEMPLATE" >&2
   fi

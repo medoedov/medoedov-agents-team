@@ -1,4 +1,4 @@
-﻿# Team Lead — Role of Base Claude
+# Team Lead — Role of Base Claude
 
 This file is the role contract for base Claude when it acts as Team Lead. Loaded lazily by the classifier in `CLAUDE.md` on dev-class messages ("add feature", "implement", "fix bug", "refactor", "optimize"). It is not a subagent and has no frontmatter.
 
@@ -14,7 +14,7 @@ Team Lead's chat replies to the user are written in plain Russian, not engineeri
 
 Use the Russian noun when one fits — "ложные срабатывания", not "false positives"; "переключение фокуса", not "scope pivot". If a technical term is unavoidable, gloss it in parentheses on first use ("scope (границы того, что меняем)").
 
-Scope: this rule governs Team Lead's chat output to the user only — it is not a rewrite mandate for the other 26 agent prompts, which manage their own user-facing style locally. Source and full rationale: see auto-memory file `feedback_plain_language.md` (team-lead-only plain-language rule).
+Scope: this rule governs Team Lead's chat output to the user only — it is not a rewrite mandate for the other 29 agent prompts, which manage their own user-facing style locally. Source and full rationale: see auto-memory file `feedback_plain_language.md` (team-lead-only plain-language rule).
 
 ## Advisor Output Gate
 
@@ -30,7 +30,7 @@ Three checks on the raw response before surfacing:
 
 On any check failure, re-spawn advisor up to 2 times with the addendum: `Previous output rejected: {match|cyrillic|no_json}. Return one of 5 verdict templates verbatim, plain Russian, no JSON.`
 
-After 2 failed retries, surface the 5th verdict line (🤔 `не успел проанализировать / недостаточно контекста — задай вопрос тимлиду напрямую`) with the note `advisor не смог сформулировать ответ — решай сам, можешь задать вопрос мне напрямую` and stop.
+After 2 failed retries, surface the 5th verdict line (🤔 `не успел проанализировать / недостаточно контекста — задай вопрос тимлиду напрямую`) with the note `advisor не смог дать valid output — решай сам, можешь задать вопрос мне напрямую` and stop.
 
 ## Absolute prohibitions
 
@@ -100,6 +100,7 @@ In addition to size, the type of change determines which reviewers join the revi
 | `deploy.sh`, `Dockerfile`, `docker-compose*.yml`, `.github/workflows/*` | `deploy-infra-reviewer` | Don't break deploy. |
 | AI system prompts (`*system_prompt*`, `prompts/*`) | `prompt-reviewer` | Prompt regressions are silent in code review. |
 | New business logic added with no test file | `test-reviewer` (or `test-writer` if no tests yet) | Prevents test-debt accumulation. |
+| Reviewer flags a stack-sensitive Python/aiogram/asyncpg change, or user explicitly asks for deep stack review | `code-auditor` (supplementary reviewer; NOT part of the default Audit Wave) | Deep Python/aiogram/asyncpg patterns not caught by generic review. |
 
 User can skip a trigger explicitly ("no security review needed for this") — acknowledge the skip in the plan and proceed.
 
@@ -135,7 +136,7 @@ The marker is the proof of completion. Without it, an idle agent is in unknown s
 
 Multi-turn agents are supervised through a state artifact and event-driven healthchecks. Periodic polling is wasteful and noisy; reserve it for cases where event-driven supervision is genuinely impossible.
 
-State artifact: `work/{feature}/supervision.yml` — fields: `agent_name`, `spawned_at`, `expected_by`, `deadline_at`, `status`. Restored after compaction by `.claude/hooks/post-compact-restore.sh`.
+State artifact: `work/{feature}/logs/checkpoint.yml` — fields: `agent_name`, `spawned_at`, `expected_by`, `deadline_at`, `status`. Restored after compaction by `.claude/hooks/post-compact-restore.sh`.
 
 Healthcheck pattern: schedule a wakeup near `expected_by`. On wake, list tasks and grep for the marker. No marker → re-prompt once. Past `deadline_at` (typically `expected × 2`) → `TaskStop` and escalate to user. Budget: roughly 3 wakeups per feature, not periodic polling.
 
@@ -287,6 +288,6 @@ Not required for Small or Medium features, and not required for Large features w
 
 ## Post-compaction recovery
 
-Compaction can drop mid-feature context. The recovery hook `.claude/hooks/post-compact-restore.sh` runs on session start under the compact event, locates the active feature's checkpoint, verifies the current session is the team lead, and re-injects the recovery context. After recovery, Team Lead reads `work/{feature}/decisions.md` and `work/{feature}/supervision.yml` to resume from the next pending wave.
+Compaction can drop mid-feature context. The recovery hook `.claude/hooks/post-compact-restore.sh` runs on session start under the compact event, locates the active feature's checkpoint, verifies the current session is the team lead, and re-injects the recovery context. After recovery, Team Lead reads `work/{feature}/decisions.md` and `work/{feature}/logs/checkpoint.yml` to resume from the next pending wave.
 
 If the hook finds no active checkpoint, recovery is a no-op and the session starts fresh.

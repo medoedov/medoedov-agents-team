@@ -1,4 +1,4 @@
-﻿---
+---
 description: |
   Single sweep cycle for the watchdog agent. Invoked via /loop 5m. Reads
   filesystem state, classifies stalls (S1-S4), pings or escalates, writes to
@@ -52,7 +52,7 @@ warning marker (`stall_types: ["checkpoint-missing"]`, `redacted: true`) and
 return. Do not crash the sweep loop.
 
 For each active teammate compute `last_activity` as the union (max) of the
-three filesystem signals:
+four filesystem signals:
 
 - Most-recent commit touching the feature directory:
   `git log --format=%ct -1 -- work/{feature}/`
@@ -61,7 +61,7 @@ three filesystem signals:
 - Newest per-task review report mtime:
   `python -c "import os,sys; print(int(os.path.getmtime(sys.argv[1])))" work/{feature}/logs/working/{task}/<newest>.json`
 - Newest audit wave report mtime (covers audit-wave teammates that write
-  to `work/{feature}/logs/tasks/*.json` — e.g. code-auditor, bug-hunter,
+  to `work/{feature}/logs/tasks/*.json` — e.g. security-auditor, bug-hunter,
   test-reviewer — and would otherwise not trip the per-task glob):
   `python -c "import os,sys; print(int(os.path.getmtime(sys.argv[1])))" work/{feature}/logs/tasks/<newest>.json`
 
@@ -73,12 +73,12 @@ If `now - last_activity < 300` seconds (one sweep interval), the teammate is
 making genuine progress. Reset that teammate's `consecutive_stale` counter to
 0 and skip classification for this teammate. This is the only line of
 defence against false positives on long edits, large reads, or multi-minute
-Bash. The union over three signals is deliberate — any one is sufficient
+Bash. The union over four signals is deliberate — any one is sufficient
 proof of work (see agent spec, "Filesystem genuine-work oracle").
 
 ### Step 3 — Stall classification
 
-If the oracle did not fire (all three signals are >5 min stale), classify
+If the oracle did not fire (all four signals are >5 min stale), classify
 the teammate into at most one of S1–S4 per the agent spec rules:
 
 - **S1 — Multi-reviewer round desync.** `len(reviewers) >= 2` AND the
@@ -89,7 +89,7 @@ the teammate into at most one of S1–S4 per the agent spec rules:
   straight to team-lead.
 - **S2 — Idle with pending inbox.** Teammate emitted `next: idle` while
   TaskList shows `has_unread == true`. Action: 3-ping protocol (Step 4).
-- **S3 — No filesystem progress.** All three activity signals >15 min stale
+- **S3 — No filesystem progress.** All four activity signals >15 min stale
   AND `has_unread == false`. Action: 3-ping protocol (Step 4).
 - **S4 — Subscription rate-limit.** Teammate's last output contains a
   subscription rate-limit error. Detection: feed the error body through the M4
@@ -169,7 +169,7 @@ Entry schema (one line per sweep, newline-delimited):
 
 Before assembling the entry, every string field passes through
 `_redact_sensitive()` from the project error classifier module (see
-project-knowledge architecture.md for the module path).
+project-knowledge patterns.md for the module path).
 This strips LLM provider API key patterns (e.g. `sk-ant-...`, `sk-...`),
 Google `AIza...`, and HTTP `Bearer ...` / `Basic ...` patterns, replacing
 each match with `[REDACTED]`. The redaction is reused — never re-implemented
@@ -222,10 +222,10 @@ string.
 ERROR_MSG="$raw_error" python -c "
     import os, sys
     sys.path.insert(0, '.')
-    from <project_module>.error_classifier import classify_error, _redact_sensitive
+    from <project_module>.error_classifier import classify_claude_error, _redact_sensitive
     class _E(Exception):
         def __init__(self, m): self.message = m
-    result = classify_error(_E(os.environ['ERROR_MSG']))
+    result = classify_claude_error(_E(os.environ['ERROR_MSG']))
     print(result)"
 ```
 
@@ -262,8 +262,7 @@ print(m.group(1) if m else '')"
 - **Self-skip:** the teammate literally named `watchdog` must not appear in
   `active_teammates` and never triggers a ping — even if it appears in
   TaskList alongside other teammates.
-- **Windows mtime resolution:** `os.path.getmtime()` resolution varies (1 s
-  NTFS, 1 ms ext4); the 5-minute threshold makes this irrelevant in practice.
+- **Windows mtime resolution:** NTFS stores timestamps at 100 ns granularity, but filesystem/OS layers may round — treat sub-second equality conservatively; the 5-minute sweep window is unaffected.
 - **Already-paused run:** if `stall_state.active == true` from a prior M4
   detection, Step 1 short-circuits with an empty log entry. Resume is owned
   by `SessionStart.sh` / `ScheduleWakeup`, not by the sweep itself.

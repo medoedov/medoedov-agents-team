@@ -42,7 +42,7 @@ Execute a spec-driven task with validation and status tracking.
 
 ## Step 4: Complete
 
-1. Read template `~/.claude/shared/work-templates/decisions.md.template` and write a concise execution report to `work/{feature}/decisions.md`. Follow template format strictly — no extra sections.
+1. Read template `.claude/shared/work-templates/decisions.md.template` and write a concise execution report to `work/{feature}/decisions.md`. Follow template format strictly — no extra sections.
 2. Update task frontmatter: `status: in_progress` → `status: done`
 3. Update tech-spec: `- [ ] Task N` → `- [x] Task N`
 4. Git commit: `chore: complete task {N} — update status and decisions`

@@ -1,4 +1,4 @@
-﻿---
+---
 description: Зеркалирует .claude/ из приватного проекта в публичный OS-репозиторий
 command: python .claude/shared/scripts/sync_to_os.py
 ---

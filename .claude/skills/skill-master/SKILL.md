@@ -386,7 +386,7 @@ Use skill-checker subagent to validate the skill at {path}.
 If issues found → fix them → run skill-checker again.
 ```
 
-skill-checker is defined in `~/.claude/agents/skill-checker.md` and has skill-master preloaded.
+skill-checker is defined in `.claude/agents/skill-checker.md` and has skill-master preloaded.
 
 ### Self-Check Before Validation
 
