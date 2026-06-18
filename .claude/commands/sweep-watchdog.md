@@ -1,6 +1,6 @@
 ---
 description: |
-  Single sweep cycle for the watchdog agent. Invoked via /loop 5m. Reads
+  Single sweep cycle for the watchdog agent. Invoked via /loop 10m. Reads
   filesystem state, classifies stalls (S1-S4), pings or escalates, writes to
   watchdog.log.
 ---
@@ -8,7 +8,7 @@ description: |
 # Sweep-watchdog — single sweep cycle
 
 This command implements one full sweep cycle of the watchdog agent
-(`.claude/agents/watchdog.md`). The watchdog invokes it via `/loop 5m
+(`.claude/agents/watchdog.md`). The watchdog invokes it via `/loop 10m
 /sweep-watchdog` immediately after TeamCreate and continues until the
 `/do-all-tasks` run ends. Each invocation is independent: it reads state, acts,
 logs, and returns.
@@ -38,6 +38,14 @@ JSON line to `work/{feature}/logs/watchdog.log`.
 
 ### Step 1 — Read state
 
+If `awaiting_user.active == true` in `checkpoint.yml`, the run is parked behind
+a user decision (plan approval, reviewer-conflict choice, escalation reply,
+deploy go-ahead). The teammates are correctly waiting, not stalled — pinging
+them is noise. Short-circuit: write one log entry with `active_teammates: []`,
+`stall_types: ["awaiting-user"]`, `pings_sent: 0`, `redacted: true`, and return.
+This is the awaiting-user guard from the agent spec ("Awaiting-user
+suppression"). Team-lead clears the flag when the user replies.
+
 If `stall_state.active == true` in `checkpoint.yml`, the run is already
 paused waiting for an M4 wake. Skip the rest of this sweep, write a single
 log entry with `active_teammates: []`, `stall_types: []`, `redacted: true`,
@@ -45,7 +53,11 @@ and return. This is the idempotency guard from the agent spec M4 section.
 
 Otherwise enumerate active teammates from the checkpoint `tasks:` block — any
 row with `status: in_progress`. Skip the teammate literally named `watchdog`
-(self-skip per agent spec edge cases).
+(self-skip per agent spec edge cases). Also skip any teammate whose latest
+marker is `next: awaiting-user` (or `blocked: user`): it is individually parked
+on the user, so run no oracle, no classification, and no `consecutive_stale`
+increment for it — record it under `awaiting_user_teammates` in the log entry
+and move on. Per agent spec "Awaiting-user suppression".
 
 If `checkpoint.yml` is missing or unreadable, append one log entry with a
 warning marker (`stall_types: ["checkpoint-missing"]`, `redacted: true`) and
@@ -69,9 +81,12 @@ A missing signal contributes 0 (epoch), never a crash.
 
 ### Step 2 — Genuine-work oracle
 
-If `now - last_activity < 300` seconds (one sweep interval), the teammate is
+If `now - last_activity < 300` seconds — a fixed 5-minute recent-work window,
+deliberately decoupled from the 10-minute sweep cadence — the teammate is
 making genuine progress. Reset that teammate's `consecutive_stale` counter to
-0 and skip classification for this teammate. This is the only line of
+0 and skip classification for this teammate. (With a 10-minute sweep the 5–15
+min grace window between this oracle and the 15-min S3 threshold absorbs any
+gap, so no false ping is emitted for work done between sweeps.) This is the only line of
 defence against false positives on long edits, large reads, or multi-minute
 Bash. The union over four signals is deliberate — any one is sufficient
 proof of work (see agent spec, "Filesystem genuine-work oracle").
@@ -163,9 +178,15 @@ Entry schema (one line per sweep, newline-delimited):
   "pings_sent": 1,
   "escalations": 0,
   "stall_types": ["S2"],
+  "awaiting_user_teammates": [],
   "redacted": true
 }
 ```
+
+`awaiting_user_teammates` holds teammates skipped this sweep for a
+`next: awaiting-user` marker (Step 1). When the global `awaiting_user.active`
+guard fires, the whole entry is the short-circuit form from Step 1:
+`active_teammates: []`, `stall_types: ["awaiting-user"]`, `pings_sent: 0`.
 
 Before assembling the entry, every string field passes through
 `_redact_sensitive()` from the project error classifier module (see
@@ -262,7 +283,7 @@ print(m.group(1) if m else '')"
 - **Self-skip:** the teammate literally named `watchdog` must not appear in
   `active_teammates` and never triggers a ping — even if it appears in
   TaskList alongside other teammates.
-- **Windows mtime resolution:** NTFS stores timestamps at 100 ns granularity, but filesystem/OS layers may round — treat sub-second equality conservatively; the 5-minute sweep window is unaffected.
+- **Windows mtime resolution:** NTFS stores timestamps at 100 ns granularity, but filesystem/OS layers may round — treat sub-second equality conservatively; the 10-minute sweep window is unaffected.
 - **Already-paused run:** if `stall_state.active == true` from a prior M4
   detection, Step 1 short-circuits with an empty log entry. Resume is owned
   by `SessionStart.sh` / `ScheduleWakeup`, not by the sweep itself.

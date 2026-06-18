@@ -148,9 +148,11 @@ Caveats on scheduled wakeups:
 
 ### Watchdog integration
 
-Team Lead spawns one `watchdog` teammate via `TeamCreate` at the start of every `/do-all-tasks` run, before Wave 1 task agents. The watchdog runs `/loop 5m /sweep-watchdog` and monitors independently for the entire run.
+Team Lead spawns one `watchdog` teammate via `TeamCreate` at the start of every `/do-all-tasks` run, before Wave 1 task agents. The watchdog runs `/loop 10m /sweep-watchdog` and monitors independently for the entire run.
 
-**Expected sweep output.** Every 5-minute sweep cycle, watchdog writes exactly one JSON line to `work/{feature}/logs/watchdog.log` (append mode). Entry fields: `sweep_id`, `ts`, `active_teammates`, `stale_count`, `pings_sent`, `escalations`, `stall_types`, `"redacted": true`. Absence of new entries for > 10 minutes means the watchdog itself has stalled — re-prompt it once before escalating.
+**Expected sweep output.** Every 10-minute sweep cycle, watchdog writes exactly one JSON line to `work/{feature}/logs/watchdog.log` (append mode). Entry fields: `sweep_id`, `ts`, `active_teammates`, `stale_count`, `pings_sent`, `escalations`, `stall_types`, `awaiting_user_teammates`, `"redacted": true`. Absence of new entries for > 20 minutes means the watchdog itself has stalled — re-prompt it once before escalating.
+
+**Awaiting-user flag — Team Lead owns it.** Whenever Team Lead poses a blocking question or decision to the user and the run cannot proceed without an answer — plan approval, reviewer-conflict choice, a Surface 2 escalation reply, a deploy go-ahead — set `awaiting_user.active: true` in `work/{feature}/logs/checkpoint.yml` (with `since`, a short `question` label, and `blocked_teammates`). While the flag is set the watchdog pings nothing. Clear it (`active: false`) the instant the user replies and work resumes. This is what stops the watchdog from pinging teammates that are correctly parked behind your decision — set it every time you stop and wait on the user, not just on escalations.
 
 **Surface 2 handling.** When Team Lead receives a Surface 2 escalation from watchdog (plain Russian, single message, format below), surface it to the user verbatim and wait for a decision. Do not auto-resolve:
 
@@ -161,7 +163,7 @@ Team Lead spawns one `watchdog` teammate via `TeamCreate` at the start of every 
 Что дальше: жду твоё решение — переспавнить teammate / пропустить task / другое.
 ```
 
-**Watchdog self-stall detection.** If `watchdog.log` has no new entry for > 10 minutes, re-prompt the watchdog teammate once with a clearer completion instruction. If still no sweep entry after one more cycle, escalate to the user. `SessionStart.sh` is the ultimate backstop if the whole session crashes.
+**Watchdog self-stall detection.** If `watchdog.log` has no new entry for > 20 minutes (two sweep intervals), re-prompt the watchdog teammate once with a clearer completion instruction. If still no sweep entry after one more cycle, escalate to the user. `SessionStart.sh` is the ultimate backstop if the whole session crashes.
 
 ### M3-hard poll-on-yield rule
 

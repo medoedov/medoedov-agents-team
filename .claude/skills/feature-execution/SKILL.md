@@ -64,8 +64,9 @@ Team lead orchestrates feature delivery. You are a dispatcher: spawn agents, tra
 4. Save to `work/{feature}/logs/execution-plan.md`
 5. Show plan to user, wait for approval
 6. Create team via TeamCreate
-7. Spawn watchdog teammate — `subagent_type: "general-purpose"`, `model: "opus"`, `team_name: "{team}"`.
-   Prompt: "You are the watchdog agent for feature {feature}. Run `/loop 5m /sweep-watchdog` to monitor progress. Feature dir: {feature_dir}"
+7. Spawn watchdog teammate — `subagent_type: "general-purpose"`, `model: "haiku"`, `team_name: "{team}"`.
+   Monitoring is filesystem-state comparison and JSON-line logging, not reasoning — Haiku is the right tier and keeps the always-on loop cheap. The explicit override is the operative model selector here (it wins over the `watchdog.md` frontmatter because the spawn uses `general-purpose`); keep the two in sync.
+   Prompt: "You are the watchdog agent for feature {feature}. Run `/loop 10m /sweep-watchdog` to monitor progress. Feature dir: {feature_dir}"
 8. Update `work/{feature}/logs/checkpoint.yml`: set `total_waves` from the execution plan.
 
 **Checkpoint:** execution plan approved, team created, checkpoint initialized.

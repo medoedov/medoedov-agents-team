@@ -38,3 +38,16 @@ stall_state:
   pending_teammates: []       # teammate names mid-task at stall
   last_active_wave: null      # integer wave index for resume
   resume_attempts: 0          # escalate to user after 3 failed attempts
+
+# Set by team-lead whenever it poses a blocking question/decision to the user
+# and the run cannot proceed without an answer (plan approval, reviewer-conflict
+# choice, escalation reply, deploy go-ahead). While active == true the watchdog
+# sweep short-circuits and pings NOTHING — the run is legitimately waiting on the
+# user, not stalled. Team-lead clears it (active: false) the moment the user
+# replies and work resumes. This is the fix for "watchdog pings agents that are
+# blocked on my decision".
+awaiting_user:
+  active: false               # bool — run blocked on a user decision; suppress all pings
+  since: null                 # ISO-8601 timestamp the block began
+  question: null              # short label of what the user is being asked (for the sweep log)
+  blocked_teammates: []       # teammate names parked behind this decision (informational)

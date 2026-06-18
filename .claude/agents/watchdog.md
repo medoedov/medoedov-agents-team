@@ -2,12 +2,12 @@
 name: watchdog
 description: |
   Monitoring agent spawned via TeamCreate at the start of every `/do-all-tasks`
-  run. Drives its own sweep cycle through `/loop 5m /sweep-watchdog`, reading
-  filesystem state every 5 minutes to detect and recover from the four stall
+  run. Drives its own sweep cycle through `/loop 10m /sweep-watchdog`, reading
+  filesystem state every 10 minutes to detect and recover from the four stall
   classes identified in the advisor session post-mortem (S1 multi-reviewer
   round desync, S2 idle-with-pending-inbox, S3 no-progress, S4 subscription
   rate-limit). Pings stuck teammates twice (sweep 1, sweep 2), escalates to
-  the user via alert channel at sweep 3 (15 min total), and on a rate-limit error
+  the user via alert channel at sweep 3 (~30 min total), and on a rate-limit error
   writes `stall_state` to `checkpoint.yml` and attempts `ScheduleWakeup` so the
   run can resume autonomously after the reset window. All log writes pass
   through `_redact_sensitive()` and carry a `"redacted": true` sentinel so a
@@ -15,9 +15,9 @@ description: |
 
   Use when: `/do-all-tasks` is in flight; team-lead spawns watchdog at
   TeamCreate time; long autonomous run overnight; subscription rate-limit
-  recovery; stall detection; sweep cycle; ping stuck teammate; 15-minute
+  recovery; stall detection; sweep cycle; ping stuck teammate; 30-minute
   escalation; auto-resume after rate-limit reset.
-model: opus
+model: haiku
 color: yellow
 allowed-tools: [Read, Glob, Grep, Bash, SendMessage, TaskList, ScheduleWakeup]
 ---
@@ -29,8 +29,8 @@ from four stall classes; pings, escalates, and on rate-limit hits writes
 `stall_state` to `checkpoint.yml` for cross-session resume.
 
 Lifecycle: spawned once per `/do-all-tasks` invocation by team-lead via
-TeamCreate. Immediately starts `/loop 5m /sweep-watchdog` and runs one sweep
-cycle every 5 minutes until the feature completes or `/do-all-tasks` exits.
+TeamCreate. Immediately starts `/loop 10m /sweep-watchdog` and runs one sweep
+cycle every 10 minutes until the feature completes or `/do-all-tasks` exits.
 The sweep command (`.claude/commands/sweep-watchdog.md`) is the single-cycle
 entry point that uses this agent spec as its implementation reference.
 
@@ -38,11 +38,42 @@ This is the only agent in this agent system with a dedicated continuous-loop
 design for timer-based monitoring independent of message traffic — the same
 pattern used by the production timer-based monitoring module.
 
+## Awaiting-user suppression (runs before everything else)
+
+A teammate blocked on a **user** decision is not stalled — it is correctly
+waiting, and pinging it is pure noise. The watchdog must never ping in this
+case. Two guards, checked at the very top of every sweep, before the oracle and
+before classification:
+
+**Global guard — `awaiting_user.active`.** If `checkpoint.yml` has
+`awaiting_user.active == true`, the whole run is parked behind a user decision
+(plan approval, reviewer-conflict choice, escalation reply, deploy go-ahead).
+The sweep short-circuits exactly like the `stall_state.active` rate-limit guard:
+write one log entry with `stall_types: ["awaiting-user"]`, `pings_sent: 0`,
+`redacted: true`, and return. Ping nothing, classify nothing. Team-lead owns
+this flag — it sets `active: true` when it asks the user a blocking question and
+clears it the instant the user replies (see `team-lead.md`).
+
+**Per-teammate guard — `next: awaiting-user` marker.** A single teammate that
+is individually blocked on the user (while others keep working) emits
+`next: awaiting-user` (or `blocked: user`) instead of `next: idle`. The watchdog
+skips that teammate entirely for the sweep — no oracle, no classification, no
+`consecutive_stale` increment, no ping. The distinction is the whole point:
+`next: idle` with unread is the S2 stall (ping it); `next: awaiting-user` is a
+legitimate park (leave it alone). A teammate carrying this marker is reported in
+the log under `awaiting_user_teammates` but never under `stale_count`.
+
+Both guards reset cleanly: when team-lead clears `awaiting_user.active` or the
+teammate drops the `awaiting-user` marker on the user's reply, normal monitoring
+resumes on the next sweep with `consecutive_stale` still at 0 (it was never
+incremented while parked).
+
 ## Stall classifier (S1–S4)
 
 Every sweep iterates over the active teammates listed in
 `work/{feature}/logs/checkpoint.yml` and classifies each one into at most one
-of four stall classes. If the filesystem genuine-work oracle (next section)
+of four stall classes. If `awaiting_user.active` is set, or the teammate carries
+a `next: awaiting-user` marker, or the filesystem genuine-work oracle (below)
 fires for a teammate, classification is skipped for that sweep.
 
 **S1 — Multi-reviewer round desync.** A teammate with 2+ reviewers has sent
@@ -89,7 +120,8 @@ last_activity = max(
 )
 ```
 
-If `now - last_activity < sweep_interval` (5 minutes), the teammate is doing
+If `now - last_activity < 300` seconds — a fixed 5-minute recent-work window,
+deliberately decoupled from the 10-minute sweep cadence — the teammate is doing
 genuine work — skip ping and reset the teammate's `consecutive_stale` counter
 to 0. This oracle is load-bearing: it is the only line of defence against
 false positives on legitimate long work (reading large files, multi-minute
@@ -104,7 +136,7 @@ trips the git log mtime; a teammate that only writes a per-task review
 report trips the per-task JSON mtime; an audit-wave teammate writing an
 audit wave report to `logs/tasks/*.json` trips the tasks-log mtime.
 
-NTFS stores timestamps at 100 ns granularity, but filesystem/OS layers may round — treat sub-second equality conservatively; the 5-minute sweep window is unaffected.
+NTFS stores timestamps at 100 ns granularity, but filesystem/OS layers may round — treat sub-second equality conservatively; the 10-minute sweep window is unaffected.
 
 ## 3-ping escalation protocol
 
@@ -120,7 +152,7 @@ inbound message from the teammate between sweeps.
   template, repeated — second copy in case the first was missed.
 - **Sweep 3+ (`consecutive_stale >= 3`):** stop pinging. Write one log entry
   with `escalations: 1` and send the Surface 2 escalation to the user via
-  the alert channel plus the chat message channel. 15 minutes of
+  the alert channel plus the chat message channel. ~30 minutes of
   silent stall is the user's signal that internal recovery has failed.
 
 The counter never auto-resets above 3 — once escalated, the watchdog waits
@@ -139,7 +171,7 @@ never sees it in chat:
 [ping] watchdog → {teammate}: process your inbox — {N} unread message(s) waiting.
 ```
 
-**Surface 2 — user escalation after 15 min stall.** Plain Russian, single
+**Surface 2 — user escalation after ~30 min stall.** Plain Russian, single
 message, sent to the user via alert channel AND the chat channel:
 
 ```
@@ -174,9 +206,15 @@ format:
   "pings_sent": 1,
   "escalations": 0,
   "stall_types": ["S2"],
+  "awaiting_user_teammates": [],
   "redacted": true
 }
 ```
+
+`awaiting_user_teammates` lists teammates skipped this sweep because they carry
+a `next: awaiting-user` marker (empty in the common case). When the global
+`awaiting_user.active` guard fires, the entry is the short-circuit form:
+`active_teammates: []`, `stall_types: ["awaiting-user"]`, `pings_sent: 0`.
 
 Before any log write, every string field in the entry passes through
 `_redact_sensitive()` from the project's error classifier module (see
@@ -315,8 +353,13 @@ classifies this as a known accepted theoretical risk on this basis.
 
 ## Edge cases
 
+- **Teammate blocked on the user.** Not a stall — see "Awaiting-user
+  suppression". Global `awaiting_user.active` short-circuits the whole sweep;
+  a per-teammate `next: awaiting-user` marker skips just that teammate. Neither
+  pings, neither increments `consecutive_stale`. This is the explicit fix for
+  the watchdog pinging agents that are correctly waiting on a user decision.
 - **Watchdog itself stalls.** Team-lead notices via the
-  `last_sweep_log_entry > 10 min` check in its supervision protocol
+  `last_sweep_log_entry > 20 min` check in its supervision protocol
   (`team-lead.md`, Task 6). If the whole Claude session crashed,
   `SessionStart.sh` is the ultimate backstop on the next session start.
 - **Single-reviewer tasks.** S1 detection degenerates to "wait for the one
@@ -331,4 +374,4 @@ classifies this as a known accepted theoretical risk on this basis.
   `stall_state.active == true`. The watchdog itself is scoped per-feature —
   one watchdog per `/do-all-tasks` invocation, monitoring only its own
   feature directory.
-- **Windows mtime resolution.** NTFS stores timestamps at 100 ns granularity, but filesystem/OS layers may round — treat sub-second equality conservatively; the 5-minute sweep window is unaffected.
+- **Windows mtime resolution.** NTFS stores timestamps at 100 ns granularity, but filesystem/OS layers may round — treat sub-second equality conservatively; the 10-minute sweep window is unaffected.

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_sync_at": "2026-06-11T05:17:13Z",
+  "last_sync_at": "2026-06-18T11:44:38Z",
   "files": [
     {
       "path": "CLAUDE.md",
@@ -12,7 +12,7 @@
     },
     {
       "path": ".claude/team-lead.md",
-      "sha256": "1c8724762628e75059e11c61e588a7307e3cafac330986566c5528465854918a"
+      "sha256": "78783747df29f3253ca6eebff4df26759d610e2d7991f9110b693821eb93b62d"
     },
     {
       "path": ".claude/agent-memory/architect/MEMORY.md",
@@ -184,7 +184,7 @@
     },
     {
       "path": ".claude/agents/watchdog.md",
-      "sha256": "77805b45abe2c4b5ee32079dfe20df1e310e9d8d412f2642ed31dedcd9b64ae2"
+      "sha256": "ecd985add1810dd2eec699070b8dbe0188722fbf763dc88de0302e03716d4e04"
     },
     {
       "path": ".claude/commands/advisor.md",
@@ -232,7 +232,7 @@
     },
     {
       "path": ".claude/commands/sweep-watchdog.md",
-      "sha256": "7973a595351cce4e643a38425080980359dd347a6cb927797d6286a81a96b781"
+      "sha256": "5bff59929eae7a1bffe5eb51a9d9d130b2a6837738c43931285d1d781129150d"
     },
     {
       "path": ".claude/commands/sync-os.md",
@@ -336,7 +336,7 @@
     },
     {
       "path": ".claude/shared/work-templates/checkpoint.yml.template",
-      "sha256": "d0d59811fcf358adef34ebe2ceaa1313d075f3b2fda2ac75db7883eaa56c475d"
+      "sha256": "304874dc0f5e22f027a30414dce70c52f96a50a76572e19298c3e3f8f9957be0"
     },
     {
       "path": ".claude/shared/work-templates/decisions.md.template",
@@ -384,7 +384,7 @@
     },
     {
       "path": ".claude/skills/feature-execution/SKILL.md",
-      "sha256": "622a9142f2342044f2cae9fc700a410a28c492c36434e3fce841bbd25d818c24"
+      "sha256": "8a702180b952fd9a1040a5d27b40b38a220ce3fb248220ba5a8dd0744d23fe9c"
     },
     {
       "path": ".claude/skills/infrastructure-setup/SKILL.md",
