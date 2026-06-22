@@ -163,6 +163,8 @@ Team Lead spawns one `watchdog` teammate via `TeamCreate` at the start of every 
 Что дальше: жду твоё решение — переспавнить teammate / пропустить task / другое.
 ```
 
+**Rate-limit pause & resume.** On a subscription/API rate-limit, watchdog writes `stall_state` (with the real `reset_at` parsed from the error) to `checkpoint.yml`, sends Surface 3, and the run pauses. You do nothing during the window. When the limit clears, resume is automatic: in-session the watchdog's `/loop 10m` detects `now >= reset_at` and signals you to continue from `stall_state.last_active_wave` — re-spawn that wave per the feature-execution resume protocol. If the session died during the window, `SessionStart.sh` emits `/do-all-tasks {feature}` on next launch and feature-execution Phase 1 resumes from the checkpoint. Either way, do NOT set the awaiting-user flag for a rate-limit pause — that flag is for decisions you put to the user, not for automatic limit waits.
+
 **Watchdog self-stall detection.** If `watchdog.log` has no new entry for > 20 minutes (two sweep intervals), re-prompt the watchdog teammate once with a clearer completion instruction. If still no sweep entry after one more cycle, escalate to the user. `SessionStart.sh` is the ultimate backstop if the whole session crashes.
 
 ### M3-hard poll-on-yield rule

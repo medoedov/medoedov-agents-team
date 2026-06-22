@@ -46,10 +46,18 @@ them is noise. Short-circuit: write one log entry with `active_teammates: []`,
 This is the awaiting-user guard from the agent spec ("Awaiting-user
 suppression"). Team-lead clears the flag when the user replies.
 
-If `stall_state.active == true` in `checkpoint.yml`, the run is already
-paused waiting for an M4 wake. Skip the rest of this sweep, write a single
-log entry with `active_teammates: []`, `stall_types: []`, `redacted: true`,
-and return. This is the idempotency guard from the agent spec M4 section.
+If `stall_state.active == true` in `checkpoint.yml`, the run is paused on a
+rate-limit. This is the **resume-on-sweep** decision (agent spec "M4 resume
+path"):
+- If `now < reset_at` — still inside the limit window. Short-circuit: write one
+  log entry with `active_teammates: []`, `stall_types: ["rate-limit-wait"]`,
+  `pings_sent: 0`, `redacted: true`, and return. (Also the M4 idempotency guard
+  — no second M4 write while paused.)
+- If `now >= reset_at` — the window cleared. Resume: set `stall_state.active:
+  false`, send **Surface 3** (auto-resume wake) to the user, signal team-lead to
+  continue from `last_active_wave`, and write a log entry with
+  `stall_types: ["rate-limit-resume"]`. Then return. `reset_at` already includes
+  the buffer, so compare against it directly.
 
 Otherwise enumerate active teammates from the checkpoint `tasks:` block — any
 row with `status: in_progress`. Skip the teammate literally named `watchdog`
@@ -141,24 +149,28 @@ Surface 1 and Surface 2 wording is owned by `.claude/agents/watchdog.md`
 Per the agent spec "M4 rate-limit path", executed exactly once per detection
 (the Step 1 `stall_state.active` guard makes it idempotent):
 
-1. Run Pattern 4 (Retry-After extraction) on the error body immediately after
-   Pattern 3 confirms the bucket is `rate_limit`. If Pattern 4 returns a
-   non-empty integer string `N`, set `reset_at = now + N + buffer_seconds`.
-   If Pattern 4 returns an empty string, default `reset_at = now + 18000s (5 h)`
-   — the subscription usage-limit rolling window. Conservative fallback over
-   fragile parsing.
+1. Run Pattern 4 (reset-time extraction) on the error body immediately after
+   Pattern 3 confirms the bucket is `rate_limit`. Pattern 4 prints the absolute
+   `reset_at` as an ISO-8601 UTC string with the buffer already folded in (it
+   reads the real reset time — Anthropic reset header / epoch / ISO /
+   `Retry-After` — and only falls back to `now + 5h` when none is present). Use
+   that value verbatim.
 2. Write the 8-field `stall_state` block to
    `work/{feature}/logs/checkpoint.yml`:
    `active: true`, `reason: "rate_limit"` (canonical — exact string matched
    by `SessionStart.sh`, NOT `rate_limit_exceeded`), `detected_at` (ISO-8601
-   UTC, current), `reset_at` (ISO-8601 UTC, computed above), `buffer_seconds:
-   60`, `pending_teammates` (active teammate names from this sweep),
+   UTC, current), `reset_at` (ISO-8601 UTC, from Pattern 4 — buffer included),
+   `buffer_seconds: 60` (diagnostic record of the pad already in `reset_at`;
+   not re-added), `pending_teammates` (active teammate names from this sweep),
    `last_active_wave` (`checkpoint.last_completed_wave + 1`),
    `resume_attempts: 0` (see agent spec known v1.0 limitation — counter is
    never incremented in this iteration).
-3. Attempt `ScheduleWakeup(delaySeconds = (reset_at - now) + buffer_seconds)`.
-   On success, the resume fires at the wake. On failure (tool unavailable in
-   the teammate context), `SessionStart.sh` is the cross-session backstop.
+3. Attempt `ScheduleWakeup(delaySeconds = clamp(reset_at - now, 60, 3600))` —
+   buffer already in `reset_at`, do not re-add. Best-effort early nudge only:
+   the runtime hard-clamps `ScheduleWakeup` to 1 hour, so it cannot span a
+   multi-hour limit. The real resume is the fixed `/loop 10m` re-checking
+   `reset_at` each sweep (Step 1, resume-on-sweep); `SessionStart.sh` is the
+   cross-session backstop if the session dies before reset.
 4. Send the **Surface 3 auto-resume wake** to the user via messaging platform alert +
    chat message — the Surface 3 template from the agent spec, with
    `{duration}`, `{start}`, `{end}`, `{N}`, `{M}`, `{task_name}` filled from
@@ -258,18 +270,25 @@ interpolated. Env-var passing is injection-safe; string interpolation is
 not. This is the only injection-safe path for moving an attacker-controllable
 string from Bash into Python.
 
-**4. Pattern 4 — Retry-After header extraction.** Returns integer seconds
-string if `Retry-After` is present in the error body, empty string otherwise.
-The M4 path uses this immediately after pattern 3 returns `rate_limit`; if
-non-empty, `reset_at = now + retry_after + buffer_seconds`; if empty, fall
-back to `now + 5h + buffer`. `ERROR_MSG` env-var passing keeps the
-injection-safety property.
+**4. Pattern 4 — reset-time extraction.** Prints the absolute `reset_at` as an
+ISO-8601 UTC string (buffer already folded in). Delegates to
+`extract_reset_at()` — the single source of truth in
+`tests/agent_orchestration/helpers.py`, reused so runtime and tests cannot
+drift. It parses the reset moment in priority order — Anthropic
+`anthropic-ratelimit-*-reset` headers (RFC3339 or epoch) → bare unix epoch near
+a reset keyword → ISO timestamp near a reset keyword → `Retry-After: <seconds>`
+(relative) → `now + 5h` fallback — rejecting any absolute candidate outside
+`(now, now+14d]`. The M4 path uses this immediately after Pattern 3 returns
+`rate_limit`. `ERROR_MSG` env-var passing keeps the injection-safety property.
 
 ```bash
 ERROR_MSG="$raw_error" python -c "
-import os, re
-m = re.search(r'Retry-After:\s*(\d+)', os.environ['ERROR_MSG'])
-print(m.group(1) if m else '')"
+import sys, os
+sys.path.insert(0, '.')
+from tests.agent_orchestration.helpers import extract_reset_at
+error_msg = os.environ.get('ERROR_MSG', '')
+reset_at = extract_reset_at(error_msg)
+print(reset_at.isoformat())"
 ```
 
 ## Edge cases

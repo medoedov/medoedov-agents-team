@@ -281,19 +281,35 @@ interpolated. Env-var passing is injection-safe; string interpolation is
 not. This is the only injection-safe path for moving an attacker-controllable
 string from Bash into Python.
 
-**4. Pattern 4 — Retry-After header extraction.** Returns integer seconds
-string if `Retry-After` is present in the error body, empty string otherwise.
-The M4 path uses this immediately after pattern 3 returns `rate_limit`; if
-non-empty, `reset_at = now + retry_after + buffer_seconds`; if empty, fall
-back to `now + 5h + buffer`. `ERROR_MSG` env-var passing keeps the
-injection-safety property.
+**4. Pattern 4 — reset-time extraction.** Prints the absolute `reset_at` as an
+ISO-8601 UTC string. The M4 path runs this immediately after Pattern 3 returns
+`rate_limit`. It delegates to `extract_reset_at()` — the single source of truth
+in `tests/agent_orchestration/helpers.py`, reused so the runtime and the test
+suite can never drift. That function parses the reset moment from the error
+body in priority order — Anthropic `anthropic-ratelimit-*-reset` headers
+(RFC3339 or epoch) → bare unix epoch near a reset keyword → ISO timestamp near
+a reset keyword → `Retry-After: <seconds>` (relative) → and only then a
+`now + 5h` fallback — rejecting any absolute candidate outside `(now, now+14d]`
+as implausible. The returned value already includes the safety buffer
+(`buffer_seconds`, default 60), so nothing downstream re-adds it. `ERROR_MSG`
+env-var passing keeps the injection-safety property (the body is never
+interpolated into the `-c` payload).
 
 ```bash
 ERROR_MSG="$raw_error" python -c "
-import os, re
-m = re.search(r'Retry-After:\s*(\d+)', os.environ['ERROR_MSG'])
-print(m.group(1) if m else '')"
+import sys, os
+sys.path.insert(0, '.')
+from tests.agent_orchestration.helpers import extract_reset_at
+error_msg = os.environ.get('ERROR_MSG', '')
+reset_at = extract_reset_at(error_msg)
+print(reset_at.isoformat())"
 ```
+
+Why this matters: a daily/weekly subscription limit carries an *absolute* reset
+time, not a relative `Retry-After`. The old extractor only read `Retry-After`
+and blindly fell back to a guessed `+5h` — so the watchdog woke at the wrong
+time. Reading the real reset time is what lets it resume exactly when the limit
+actually clears.
 
 ## M4 rate-limit path
 
@@ -302,12 +318,13 @@ watchdog runs this procedure exactly once per detection (idempotent — does
 not re-fire if `stall_state.active` is already true):
 
 1. **Compute `reset_at`.** Run Pattern 3 to confirm the error is classified as
-   `rate_limit`, then run Pattern 4 (Retry-After extraction) on the same error
-   body. If Pattern 4 returns a non-empty integer string `N`, set
-   `reset_at = now + N seconds + buffer_seconds`. If Pattern 4 returns an
-   empty string, fall back to `reset_at = now + 5h + buffer_seconds` — the
-   subscription usage limit rolling window. Never embed the raw error string
-   directly in a shell expression; always use `ERROR_MSG` env-var passing.
+   `rate_limit`, then run Pattern 4 (reset-time extraction) on the same error
+   body. Pattern 4 prints the absolute `reset_at` as an ISO-8601 UTC string,
+   with the safety buffer already folded in (it reads the real reset time from
+   the error — Anthropic reset header / epoch / ISO / `Retry-After` — and only
+   falls back to `now + 5h` when none is present). Use that value verbatim.
+   Never embed the raw error string directly in a shell expression; always use
+   `ERROR_MSG` env-var passing.
 
 2. **Write `stall_state` to `work/{feature}/logs/checkpoint.yml`** with the
    8 fields defined in
@@ -319,8 +336,10 @@ not re-fire if `stall_state.active` is already true):
      string `"rate_limit"`.
    - `detected_at`: current ISO-8601 timestamp in UTC.
    - `reset_at`: computed above, ISO-8601 in UTC.
-   - `buffer_seconds: 60` — safety pad added to `reset_at` before resume so
-     the resume call lands clearly past the reset boundary.
+   - `buffer_seconds: 60` — records the safety pad that `extract_reset_at`
+     already folded into `reset_at`. It is NOT re-added at schedule or resume
+     time (doing so would double-count); it is stored for diagnostics and so a
+     future change can recompute the raw boundary if needed.
    - `pending_teammates`: list of active teammate names from the
      checkpoint at the moment of stall.
    - `last_active_wave`: current wave number from
@@ -328,16 +347,53 @@ not re-fire if `stall_state.active` is already true):
    - `resume_attempts: 0` — see "Known v1.0 limitation" below.
 
 3. **Attempt `ScheduleWakeup`** with
-   `delaySeconds = (reset_at - now) + buffer_seconds`. If the call returns
-   successfully, the watchdog will fire again at the scheduled wake and
-   trigger the resume. If `ScheduleWakeup` is unavailable in the teammate
-   context (Wave 1 smoke gate — see Decision 4 in tech-spec), the call
-   fails; `SessionStart.sh` is the cross-session backstop and will pick up
-   the checkpoint on the next session start.
+   `delaySeconds = clamp(reset_at - now, 60, 3600)` (buffer already in
+   `reset_at` — do not re-add). **`ScheduleWakeup` is hard-clamped by the
+   runtime to a 1-hour maximum**, so for a multi-hour reset (a 5-hour rolling
+   limit, a daily/weekly cap) a single wake cannot span the window — it is only
+   a best-effort early nudge. The load-bearing resume mechanism is **not**
+   `ScheduleWakeup`; it is the fixed `/loop 10m` itself (see "M4 resume path"
+   below): every sweep re-checks whether the reset has passed. `ScheduleWakeup`
+   failing or under-shooting is harmless. `SessionStart.sh` is the
+   cross-session backstop if the whole session dies before reset.
 
 4. **Send Surface 3** to the user via alert channel + chat message, with
    `{duration}`, `{start}`, `{end}`, `{N}`, `{M}`, and `{task_name}` filled
    in from the checkpoint and the computed timestamps.
+
+## M4 resume path (resume-on-sweep)
+
+A rate-limit pause must end on its own when the limit clears. The fixed
+`/loop 10m` is the poller that makes this happen — and it survives the limit
+window because the scheduler re-fires every 10 minutes regardless of whether
+the intervening turns failed on the active limit.
+
+Every sweep, in Step 1, when `stall_state.active == true`:
+
+- **If `now < reset_at`** — still inside the limit window. Write the
+  short-circuit log entry (`stall_types: ["rate-limit-wait"]`, `pings_sent: 0`)
+  and return. Ping nothing. (This is also the idempotency guard: while paused,
+  no second M4 write fires.)
+- **If `now >= reset_at`** — the window has cleared. Resume: clear the stall
+  (`stall_state.active: false`), send **Surface 3** (auto-resume wake) to the
+  user, and signal team-lead to continue from `last_active_wave` (team-lead's
+  resume protocol re-spawns the interrupted wave; this mirrors what
+  `SessionStart.sh` emits cross-session). Write a log entry with
+  `stall_types: ["rate-limit-resume"]`.
+
+So resume happens within at most one sweep interval (~10 min) of the true reset
+— in-session if the process is alive, or via `SessionStart.sh` on the next
+session start if it is not. Neither path depends on `ScheduleWakeup` clearing
+the 1-hour ceiling.
+
+**Known caveat — turns cannot run *during* the limit.** The watchdog is itself
+a Claude agent on the same subscription; while the limit is active no turn
+(not even a Haiku sweep) can execute. The fixed-interval loop's wakes still
+fire, but the turns they trigger fail until `reset_at` passes — the first
+post-reset wake is the one that runs the resume above. Full hands-off resume
+therefore requires the session process to stay alive across the window; if it
+exits, resume falls to `SessionStart.sh` on next launch (one user action:
+start Claude).
 
 ### Known v1.0 limitation — `resume_attempts` increment
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_sync_at": "2026-06-18T11:44:38Z",
+  "last_sync_at": "2026-06-22T08:05:44Z",
   "files": [
     {
       "path": "CLAUDE.md",
@@ -12,7 +12,7 @@
     },
     {
       "path": ".claude/team-lead.md",
-      "sha256": "78783747df29f3253ca6eebff4df26759d610e2d7991f9110b693821eb93b62d"
+      "sha256": "e0e3ff386cfe0f141e56c75b0bab36dcba931088f9efcf9c6f88c3ab22e3a90e"
     },
     {
       "path": ".claude/agent-memory/architect/MEMORY.md",
@@ -64,6 +64,10 @@
     },
     {
       "path": ".claude/agent-memory/tech-writer/MEMORY.md",
+      "sha256": "30230e0d59317b8d5a6f7edecdb96848dd97d7cf1d9b167b3cd323569cfb6f20"
+    },
+    {
+      "path": ".claude/agent-memory/test-reviewer/MEMORY.md",
       "sha256": "30230e0d59317b8d5a6f7edecdb96848dd97d7cf1d9b167b3cd323569cfb6f20"
     },
     {
@@ -184,7 +188,7 @@
     },
     {
       "path": ".claude/agents/watchdog.md",
-      "sha256": "ecd985add1810dd2eec699070b8dbe0188722fbf763dc88de0302e03716d4e04"
+      "sha256": "c03ef0e09c6370f122aa7ed4f01122a6e1ca66bfe0a4c49a3e25a8a9a2a614e2"
     },
     {
       "path": ".claude/commands/advisor.md",
@@ -232,7 +236,7 @@
     },
     {
       "path": ".claude/commands/sweep-watchdog.md",
-      "sha256": "5bff59929eae7a1bffe5eb51a9d9d130b2a6837738c43931285d1d781129150d"
+      "sha256": "a2786e889600f49525ba04db65022ca59dce9eff8ef3d1cdb336c9e32603e927"
     },
     {
       "path": ".claude/commands/sync-os.md",
