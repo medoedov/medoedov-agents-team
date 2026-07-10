@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/SessionStart.sh\"",
+            "command_windows": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/SessionStart.sh\"",
+            "statusMessage": "Checking resumable feature work"
+          }
+        ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/post-compact-restore.sh\"",
+            "command_windows": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/post-compact-restore.sh\"",
+            "statusMessage": "Restoring feature checkpoint"
+          }
+        ]
+      }
+    ]
+  }
+}
