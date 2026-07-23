@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_sync_at": "2026-07-23T17:45:35Z",
+  "last_sync_at": "2026-07-23T19:58:24Z",
   "files": [
     {
       "path": "CLAUDE.md",
@@ -263,6 +263,10 @@
       "sha256": "ec5858e784ddaac1eeac91d37cbc9c9b5485c71e5f113e8c8d704f83e92641f8"
     },
     {
+      "path": ".claude/commands/update-framework.md",
+      "sha256": "3f7eb919154126000f08a525d844de73a4ea0ee31f2262c419d37e757691b01f"
+    },
+    {
       "path": ".claude/commands/write-code.md",
       "sha256": "b1ea706afea9b701e49d5d0b47defb7601b6286d20c2dac317bf8b3514e4c584"
     },
@@ -280,7 +284,7 @@
     },
     {
       "path": ".claude/shared/pipeline-contract.md",
-      "sha256": "7d944521c4b79cefb975adeb6ea900f3388136e627364325536b1724dfc4d810"
+      "sha256": "2353639ab8d88023977565520468cea57027b8caa89da28f03b0f9227eb7f491"
     },
     {
       "path": ".claude/shared/interview-templates/feature.yml",
@@ -297,6 +301,10 @@
     {
       "path": ".claude/shared/scripts/run_gitleaks_gate.ps1",
       "sha256": "16a0f15c08f6c9ce15c02dff580ddeaf1dfe7419a4baacf214c70e9b870f71b9"
+    },
+    {
+      "path": ".claude/shared/scripts/sync_from_os.py",
+      "sha256": "4c0c32ca779fd96e45c6d1170884f25d0ccac5712e8e474a4cbc8bc0846377ba"
     },
     {
       "path": ".claude/shared/scripts/sync_to_codex.py",
@@ -943,6 +951,10 @@
       "sha256": "a226415786cfd33ce7c27d9417108330c2cb74db3a516c753462bd7f0ebc3fb1"
     },
     {
+      "path": ".agents/skills/source-command-update-framework/SKILL.md",
+      "sha256": "575032be4d97aedcf28878b61d1a05f439b9e70af0ef90f971e38acdb65e355c"
+    },
+    {
       "path": ".agents/skills/source-command-write-code/SKILL.md",
       "sha256": "57b126f69ea29b0ca27c3066a3be1cc9e1a77e5b588fbcc011b6da62ac220fb1"
     },
@@ -956,7 +968,7 @@
     },
     {
       "path": ".codex/.sync/claude-to-codex.json",
-      "sha256": "b41e1eaf34bba863502787560c4cbdc16023e0e1dd09713c75baff64fe2014d8"
+      "sha256": "8dc5b7c5b19c727761a7097f7df5cc9efffb2aba00af9a4b31686a1b12ea0528"
     }
   ]
 }

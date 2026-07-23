@@ -289,6 +289,12 @@
       "source": ".claude/commands/tech-plan.md",
       "source_sha256": "ec5858e784ddaac1eeac91d37cbc9c9b5485c71e5f113e8c8d704f83e92641f8"
     },
+    ".agents/skills/source-command-update-framework/SKILL.md": {
+      "adapter": "command-skill",
+      "output_sha256": "575032be4d97aedcf28878b61d1a05f439b9e70af0ef90f971e38acdb65e355c",
+      "source": ".claude/commands/update-framework.md",
+      "source_sha256": "3f7eb919154126000f08a525d844de73a4ea0ee31f2262c419d37e757691b01f"
+    },
     ".agents/skills/source-command-write-code/SKILL.md": {
       "adapter": "command-skill",
       "output_sha256": "57b126f69ea29b0ca27c3066a3be1cc9e1a77e5b588fbcc011b6da62ac220fb1",
