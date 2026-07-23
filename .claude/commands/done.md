@@ -8,6 +8,8 @@ description: |
 
 # Done — Finalize Feature
 
+Read and follow `.claude/shared/pipeline-contract.md` before taking action. `/done` archives only a durably complete feature; conversation, commits, decisions, and checkpoints are supporting evidence, not terminal proof.
+
 ## Step 1: Load Documentation Skill
 
 Use Skill tool: `documentation-writing`
@@ -24,10 +26,21 @@ Read these files from the feature directory:
 1. `user-spec.md` — what was planned
 2. `tech-spec.md` — how it was implemented
 3. `decisions.md` — what decisions were made during implementation
+4. `tasks-manifest.yml`, task current-run pointers with their immutable run records, and
+   `feature-status.yml` — durable lifecycle evidence
 
 If `decisions.md` is missing or sparse, use `git log --oneline` for feature-related commits to understand what changed.
 
-**Completeness check:** If the feature looks incomplete (tasks not marked done in tech-spec, missing implementation, failing tests) — warn the user: "Feature appears incomplete: {reason}. Continue with finalization anyway?"
+**Strict completion gate:** fail closed unless `feature-status.yml` records all applicable terminal evidence:
+
+- `status: complete`
+- `qa: passed`
+- `unresolved_findings: 0`
+- `post_deploy: passed`, or `post_deploy: waived` with an explicit durable waiver when post-deploy is applicable but intentionally waived
+- every task in the approved manifest has a validated `{task-id}.run.yml` pointer that
+  resolves to the latest approved non-superseded immutable run with `final_status: done`
+
+Missing, malformed, stale, or contradictory evidence stops `/done` before Project Knowledge edits or archival. An owner request to stop or finalize incomplete work may be recorded as `status: aborted` with explicit `waived` gate metadata where appropriate, but it must not be represented as completed and must not be archived under `work/completed/`.
 
 ## Step 4: Update Project Knowledge
 
@@ -43,7 +56,13 @@ Apply quality principles from documentation-writing skill: no code examples, no 
 
 ## Step 5: Archive
 
-Move `work/{feature}/` → `work/completed/{feature}/` (create `work/completed/` if it doesn't exist).
+Archive atomically from `work/{feature}/` to `work/completed/{feature}/` only after the strict completion gate passes.
+
+Before moving, check for a destination collision:
+
+- If the destination does not exist, create its parent if needed and perform the atomic archive move.
+- If the source is already absent and the destination contains the same validated complete feature and evidence, treat the operation as idempotent success and make no duplicate changes.
+- Otherwise, a destination collision fails closed. Never overwrite, merge into, rename around, or delete an existing destination automatically.
 
 ## Step 6: Commit & Report
 
@@ -61,8 +80,10 @@ Move `work/{feature}/` → `work/completed/{feature}/` (create `work/completed/`
 
 - [ ] Documentation-writing skill loaded
 - [ ] Feature artifacts read and understood
-- [ ] Completeness assessed (user warned if incomplete)
+- [ ] `feature-status.yml` and every resolved immutable task run passed the strict completion gate
+- [ ] Incomplete override, if any, recorded as aborted/waived and never represented as completed
 - [ ] PK files updated (only affected ones)
-- [ ] Feature archived to work/completed/
+- [ ] Destination collision check passed and archive was atomic/idempotent
+- [ ] Feature archived to work/completed/ only when complete
 - [ ] Changes committed
 - [ ] Report delivered to user

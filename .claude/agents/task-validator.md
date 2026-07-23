@@ -25,7 +25,10 @@ Err on the side of flagging — false positive dismissed cheaply, false negative
 
 ## Stop Criteria
 
-Done when: all tasks from `task_numbers` validated; JSON report written; `status` set (`approved` = zero critical, `changes_required` = any critical). Do not validate same task twice. Do not invent issues — empty `findings` is valid output for a clean file.
+Done when: all tasks from `task_numbers` validated; JSON report written; `status` set
+(`approved` = zero critical and zero Critical/Major atomicity or skill-task mismatch findings;
+`changes_required` otherwise). Do not validate same task twice. Do not invent issues — empty
+`findings` is valid output for a clean file.
 
 ## Validation Checklist
 
@@ -38,7 +41,7 @@ Done when: all tasks from `task_numbers` validated; JSON report written; `status
 - [ ] `skills`: array of strings (`[code-writing]`, not `code-writing`); `[]` allowed
 - [ ] `reviewers`: array of strings; `[]` or `none` allowed for self-verifying tasks
 - [ ] `verify`: YAML array if present (`[smoke]`, `[user]`, `[smoke, user]`, `[]`); string → invalid
-- [ ] `teammate_name`: optional string; absence ok
+- [ ] `teammate_name`: optional human-readable worker label for logs/reports only; absence is valid, and the value has no routing, identity, role-binding, or model-binding semantics
 - [ ] No extra fields beyond template
 
 ### B. Structure
@@ -66,15 +69,21 @@ Order: `# Task N: {name}` → Required Skills → Description → What to do →
 
 ### D. Atomicity
 
-- [ ] Single responsibility, one logical unit of work; 1–3 files scope
+- [ ] Single responsibility and one architectural concern; 1–3 files is typical
 - [ ] Not "implement entire X"; produces testable result
 - [ ] Logical cohesion: steps relate to one outcome; unrelated concerns bundled → major
+- [ ] More than 5 modified paths triggers review only. Cohesive non-mechanical vertical slices
+      and production files plus their directly owned tests are valid. File count/category mix
+      alone is never blocking; multiple architectural concerns or independently separable
+      outcomes → major blocking atomicity finding.
 
 ### E. Internal Consistency
 
 - [ ] `frontmatter.skills` matches Required Skills; `frontmatter.reviewers` matches Reviewers section
 - [ ] Verification Steps always present
 - [ ] `code-writing` → reviewers include `code-reviewer`, `test-reviewer`; `skill-master` → `skill-checker`
+- [ ] Substantial Python/service/test implementation uses `code-writing`; infrastructure-only
+      skill on that work → major skill-task mismatch
 
 ### F. Carry-forward from tech-spec
 
@@ -86,7 +95,7 @@ Order: `# Task N: {name}` → Required Skills → Description → What to do →
 | Severity | Triggers |
 |----------|---------|
 | critical | Section missing; mandatory context file missing (user-spec/tech-spec/decisions/project/architecture); frontmatter field missing or wrong type; placeholder present; frontmatter↔body mismatch (skills/reviewers); AC/TDD lost from tech-spec; skill↔task-type mismatch |
-| major | Logical cohesion issue; atomicity violation (>3 unrelated files or "implement entire X"); skill content mismatch |
+| major | Logical cohesion issue; atomicity violation (mixed concerns, unexplained >5 paths, or "implement entire X"); skill content mismatch |
 | minor | Sections in wrong order; optional PK files missing; entry format imprecise; edge cases absent; TDD tests verify string presence; stylistic |
 
 ## Good vs Bad Examples
@@ -111,10 +120,21 @@ GOOD:
 
 ## Output
 
-Write JSON report to `{feature_path}/logs/tasks/template-batch{batch_number}-review.json`.
-Envelope: `validator`, `batch`, `status` (`approved` = 0 critical, `changes_required` = any critical), `findings`, `summary`, `stats`.
+Write once to immutable
+`{feature_path}/logs/tasks/task-validator-batch{batch_number}-iteration-{iteration}.json`.
+Never overwrite an earlier iteration. The strict envelope requires `schema_version: 1`,
+`validator: task-validator`, exact `feature`, `status: approved | changes_required`,
+`validated_task_ids` (canonical IDs), integer/string `iteration`, current
+`task_set_sha256`, current `task_files_map_sha256`, typed `validated_task_sha256`
+(canonical task ID to exact task-file SHA-256 for every covered ID), `supersedes` (exact
+`report_ref` + `finding_id` pairs, or `[]`), and bounded `findings`.
 
 Each finding — 7 required fields:
+
+The seven fields are `semantic_id` (or stable `id`), `severity`, `category`,
+`blocking` (an exact boolean), `quote`, `issue`, and `suggestion`. `category`
+uses the guard enum and includes `atomicity` and `skill_task_mismatch`; legacy
+`type` may be explanatory only and never replaces these required fields.
 
 ```yaml
 findings:
@@ -134,3 +154,9 @@ summary:
 
 `type` guide: `style` (frontmatter/structure), `risk` (atomicity/consistency), `architecture` (carry-forward), `bug` (broken ref/placeholder).
 `recommendation`: `proceed` = 0 critical+major; `yes_with_fixes` = 0 critical, ≤2 major; `rework_needed` = 1+ critical or 3+ major.
+
+Critical findings and structured `blocking: true` Major findings keep
+`status: changes_required`. Atomicity and skill-task mismatch findings at Major severity always
+set `blocking: true`. They close only through an approved immutable revalidation report whose
+`supersedes` names the exact report reference/finding ID and whose task IDs and digests cover the
+current replacement set. Parent aggregation, waiver, and accepted-as-is dispositions never close them.

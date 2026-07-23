@@ -2,7 +2,7 @@
 name: task-execution
 description: |
   Execute a single task from work/{feature}/tasks/{task-id}.md end-to-end:
-  load skills, implement, run reviewers (max 3 rounds), commit per round,
+  load skills, implement, run reviewers (max 3 rounds), preserve commits,
   write a state log, return control. Single-task scope only.
 
   Use when: "/do-task", "do task", "execute task", "run one task",
@@ -11,12 +11,22 @@ description: |
 
 # Task Execution
 
-Run one task file, with reviewers if declared, with at most 3 fix rounds, and leave a complete on-disk audit trail. The teammate executing the task is the driver; reviewers are spawned by the teammate, not by team lead. Implementing agents follow `engineering-principles.md` for code style, testing, error handling, and review etiquette.
+Run one task file, with reviewers if declared, with at most 3 fix rounds, and leave a
+complete on-disk audit trail. The parent/root orchestrator owns lifecycle state and
+coordinates reviewers; the implementing teammate writes only its assigned task files and
+returns evidence. Implementing agents follow `engineering-principles.md` for code style,
+testing, error handling, and review etiquette.
+
+The parent/root is the exclusive git index and commit writer. Workers return a scoped
+changed-file inventory, diff, and verification results. After validating declared
+ownership and the current gate, the parent uses path-scoped staging and creates the
+implementation or review-fix commit.
 
 ## When to use
 
 - A user (or team lead) invokes `/do-task` against a single `work/{feature}/tasks/{task-id}.md` file.
-- A `feature-execution` wave delegates one task slot to a teammate; that teammate then runs this skill for its own task.
+- A `feature-execution` wave delegates one task slot to an implementing teammate while the
+  parent/root orchestrator applies this skill's gates and coordinates its review rounds.
 - Direct request like "execute task 13" or "run task T-007" — pointing at one task file.
 
 Not for feature-level wave orchestration — multi-task spawning, wave transitions, audit waves, feature acceptance review, and resume-from-checkpoint live in [feature-execution/SKILL.md](../feature-execution/SKILL.md). If the request covers more than one task, hand back to feature-execution.
@@ -25,6 +35,9 @@ Not for feature-level wave orchestration — multi-task spawning, wave transitio
 
 Required:
 - Path to the task file: `work/{feature}/tasks/{task-id}.md`.
+- `work/{feature}/user-spec.md` with `user-spec.status: approved`.
+- `work/{feature}/tech-spec.md` with `tech-spec.status: approved`.
+- `work/{feature}/tasks-manifest.yml` with `status: approved`, listing the selected task.
 
 Derived implicitly:
 - `feature_path` = parent of `tasks/` (e.g. `work/<feature-name>/`).
@@ -36,18 +49,136 @@ Read from task frontmatter (driven by `task-decomposition` schema):
 |-------|---------|
 | `status` | `planned` → `in_progress` → `done`. Set `in_progress` on start, `done` on finish. |
 | `skills` | Skills to load before implementing (e.g. `code-writing`, `skill-master`). |
-| `reviewers` | Reviewer agents to spawn each round. `none` skips review. |
+| `reviewers` | Reviewer agents materialized by decomposition. `none` is valid only for an explicitly review-omitting skill/task. |
 | `verify` | Verification types: `[smoke]`, `[user]`, `[smoke, user]`, or `[]`. |
-| `teammate_name` | Agent name used for SendMessage routing (optional). |
-| `depends_on` | Task IDs that must be `done` first. Refuse to start if unmet. |
+| `teammate_name` | Optional human-readable worker label for logs/reports only. It is not a routing address or evidence of a bound runtime role/model. |
+| `depends_on` | Task IDs whose resolved immutable current runs must say `final_status: done`. Refuse to start if unmet. |
 
 For implementation guidance inside one round, follow [code-writing/SKILL.md](../code-writing/SKILL.md). For what reviewers do, see [code-reviewing/SKILL.md](../code-reviewing/SKILL.md).
 
+Before any mutation, fail closed unless all required artifacts exist and the three approval
+gates above are durable. Fresh mode requires `status: planned` in the approved manifest and
+task frontmatter, plus no active or canonical execution evidence. In resume mode, resolve the
+canonical current-run pointer before accepting `status: in_progress`, then reconcile spawn
+receipts, worker results, reviewer reports, and current diff. It must not reinitialize lifecycle state
+or spawn duplicate work. Dependencies are satisfied only by resolved immutable terminal
+evidence: for every ID in `depends_on`, resolve
+`work/{feature}/logs/working/task-{dependency-id}/{dependency-id}.run.yml`; a dependency is
+complete only when the selected immutable record says `final_status: done`. File existence,
+task frontmatter, a commit, or a checkpoint does not satisfy a dependency gate.
+
+Before fresh execution or resume, run exactly
+`python .claude/shared/scripts/validate_tasks_manifest.py --project . --manifest work/{feature}/tasks-manifest.yml --report work/{feature}/logs/tasks/manifest-guard-{iteration}.json`
+and require exit 0; record its immutable report ref and SHA-256. A legacy approved manifest
+that fails atomicity or skill evidence is a pre-development gate regression.
+Preserve existing WIP and evidence and return control to the parent to create
+dependency-linked remediation tasks inside the already approved objectives and
+acceptance, update task/file ownership, and rerun the manifest guard. This
+recovery must not set `awaiting_user`.
+
+### Post-approval technical amendment anchor
+
+An already-approved ordinary technical repair that preserves the approved objective,
+acceptance, scope, and risk stays inside the task. Re-run only affected targeted checks:
+no amendment hash, no amendment manifest, and no reapproval. A product/authority
+or scope change returns to the parent for a user decision. New high risk promotes
+to full before mutation. An approved full-path repair retains every security,
+QA, and terminal gate without amendment ceremony. The structured amendment flow
+below applies only to scope-changing full-path artifacts.
+
+Before any scope-changing mutation to an already-approved full-path task or plan artifact, read the
+canonical
+`.claude/shared/pipeline-contract.md#post-approval-amendment-classification`
+and accept a project-relative `amendment_ref` from the parent. The child must
+not classify a blocker or construct, approve, validate, clear, or resume an
+amendment.
+
+The parent invokes
+`.claude/shared/scripts/validate_technical_amendment.py` and supplies durable
+parent-owned validator evidence only after its atomic checkpoint transition.
+Before mutation, consume and verify the checkpoint's exact validator evidence
+reference and SHA-256, its pre-transition/artifact digests, decision, and
+approval-owned continuation. Fail closed if the amendment reference, evidence
+hash, exact gate manifest/results, approval projection, ledger head, or
+continuation is missing or mismatched. Only the parent may clear
+`awaiting_user`, set `resume_ready`, or invoke the continuation. A valid
+technical amendment does not consume task review/fix attempts;
+product/authority and exhausted results return to the parent without mutation.
+
+### High-risk role instruction gate
+
+Before any high-risk implementation spawn, the parent/root resolves the role through the
+active runtime. In Codex, read `.claude/codex/agent-profiles.toml` and validate that the
+requested role maps to the matching `.claude/agents/<role>.md`; in Claude Code, retain its
+native agent role/model binding. In every runtime, explicitly instruct the isolated child
+to read and follow that exact role source. The task envelope must bound scope, allowed
+writes, required evidence, review/test gates, ownership, and deadline. A `task_name` label,
+child self-report, or TOML existence is insufficient role-binding evidence.
+
+In Codex, profile model and effort remain desired preferences. A generic/custom selectable
+worker may pass model/reasoning effort only when the active schema supports those selectors
+and the context fork is none or bounded. Record the requested selector and acceptance or
+failure. A successful spawn proves selector acceptance, not an independent resolved-model
+trace; record a resolved trace only if exposed. Runtime-managed/fixed semantic roles remain
+locked: invoke the native fixed-role spawn with `agent_type="<exact-role>"`; it omits
+model/reasoning overrides. One generic role-bound fallback is permitted only after that
+native fixed-role spawn returns an explicit unsupported-model error. Missing or unverified
+advisory metadata never qualifies. The fallback uses the same canonical role source and
+same bounded envelope. If no selector is available, record model binding as `unsupported`
+or `unverified`.
+
+Codex uses one ordinary single-turn spawn with no filesystem receipt for
+low-risk coder and read-only reviewer work. Authorization handshakes and
+parent-owned spawn receipts remain for privileged/destructive/high-risk
+effects and matching lifecycle gates.
+
+Fail closed before code writes when the canonical role source is missing, mismatched, or
+unreadable; the child did not receive the exact role instruction and bounded envelope; the
+isolated spawn failed; or required implementation/review evidence is absent. Lack of a
+runtime model selector by itself is not a role-binding failure and does not reduce any
+code-writing, review, security, deployment, QA, or terminal gate.
+
+### Immutable run and pointer gate
+
+The immutable terminal run record is
+`work/{feature}/logs/working/task-{task-id}/runs/{run-id}.run.yml`. It requires
+`run_id`, matching task ID, `approval_status: approved`, `final_status: done`,
+evidence, and optional `supersedes:`. `Final_status: done` is immutable: never
+overwrite a terminal record.
+
+`work/{feature}/logs/working/task-{task-id}/{task-id}.run.yml` is the atomically
+replaced canonical current-run pointer, not terminal source of truth. It contains
+`current_run_id`, `current_run_path`, `projected_status`, and `evidence_digest`.
+
+Every dependency, resume, and projection gate must validate path containment
+under the same task's `runs/` directory, require the immutable record's run_id
+matches the pointer and task ID, and require its evidence digest matches the
+pointer. Enumerate the contained records and follow the supersedes chain to the
+latest approved non-superseded run; reject traversal, symlinks, cycles, missing
+ancestors, multiple leaves, or a pointer to another run.
+
+The parent owns the monotonic marker protocol. It writes supporting and
+projection artifacts first, writes and verifies the immutable terminal run
+record, then atomically replaces the canonical current-run pointer. The pointer
+is written last. On a pre-pointer interruption, the new run remains unselected
+and readers continue using the old valid pointer; recovery never edits a
+terminal record. Incomplete projections are repaired idempotently from the
+resolved immutable run.
+
 ## Process
 
-### 1. Wave composition table per pipeline triggers
+### 0. Pre-mutation reviewer gate
 
-The frontmatter shape determines which agents run, and in what order, for this single task:
+When `skills` includes `code-writing`, require `code-reviewer` in the task's
+declared reviewer set. Add `code-simplifier` only for a broad refactor or when
+code-reviewer flags complexity/readability. Empty reviewers or a missing
+code-reviewer fail closed before mutation.
+
+### 1. Parent-coordinated composition per pipeline triggers
+
+The frontmatter shape determines which agents run, and in what order, for this single task.
+The parent/root orchestrator performs every spawn and never exceeds available slots. There
+is no nested fan-out: implementing teammates and reviewers never spawn subagents.
 
 | Trigger (frontmatter shape) | Spawned agents | Order |
 |---|---|---|
@@ -58,9 +189,54 @@ The frontmatter shape determines which agents run, and in what order, for this s
 | `verify: [smoke]` present | teammate runs smoke commands before sending diff to reviewers | smoke → review round 1 |
 | `verify: [user]` present | teammate pauses after implementation; team lead asks user; resume on confirmation | implement → user check → review |
 
-Reviewer set is the source of truth in `reviewers:` — never invent additional reviewers, never silently drop a listed one. The two `verify:` rows are additive modifiers: they apply on top of whichever reviewers row matches the frontmatter shape, not as independent pipeline alternatives.
+Reviewer set is the source of truth in `reviewers:` — never invent additional reviewers
+and never silently drop a listed one. A malformed direct code task that lacks
+required `code-reviewer` fails the pre-mutation gate and returns for correction.
+Materialize `code-simplifier` only for a broad-refactor trigger, or add it after
+a complexity/readability finding. The parent/root orchestrator schedules listed reviewers
+in parallel only when slots are available, gives each reviewer the same immutable evidence
+bundle, and aggregates their disjoint reports. The two `verify:` rows are additive modifiers:
+they apply on top of whichever reviewers row matches the frontmatter shape, not as
+independent pipeline alternatives. An empty reviewers value never triggers an implicit
+generic default. It is accepted only when the selected skill explicitly allows omission and
+names its default reviewers, or the approved task identifies its worker as the review.
 
-### 2. Coder context carryover protocol
+Review counting is exact: R1 runs all required reviewers; R2 runs only affected
+Critical/Major reviewers; R3 is reserved for the final integrated all-required-reviewers gate
+(or R1 is final when clean). There is no R4; any finding after R3 routes to remediation.
+The parent deduplicates findings by stable semantic identity.
+
+For valid `reviewers: none`, the same ownership boundary applies: the worker returns its
+unique non-terminal worker-result after declared verification, and only the parent/root may
+write task status, immutable runs, the canonical current-run pointer, shared decisions, or
+checkpoint state.
+
+### 2. Task state and coder context carryover
+
+After every precondition passes, fresh mode changes task frontmatter from `status: planned`
+to `status: in_progress` and initializes parent-owned non-terminal checkpoint state. Resume
+mode keeps `status: in_progress`, resolves the current-run pointer and evidence, and must not
+reinitialize lifecycle state. A resolved immutable `final_status: done` returns success
+without a new spawn. The task otherwise remains `in_progress` throughout implementation,
+verification, reviews, fixes, conflicts, and escalation; only the durable completion gate
+may advance it to `status: done`.
+
+The parent records durable checkpoints after preconditions and binding, state initialization or resume, each review round, escalation or conflict, and terminalization.
+Each checkpoint references the canonical current-run pointer and evidence rather than
+claiming completion independently.
+
+After each implementation or fix attempt, the worker writes exactly one unique non-terminal
+worker-result at
+`work/{feature}/logs/working/task-{task-id}/{task-id}.worker-result-{attempt-id}.yml` and
+returns its path. It contains the changed-file inventory, scoped diff, tests,
+smoke evidence, blockers, and the role-source path. Privileged/high-risk runs
+also include the non-authoritative heading/version acknowledgement plus
+`receipt_id` and `receipt_path` copied from the parent-owned spawn receipt;
+ordinary runs omit receipt fields. Selector, agent_type, and source/envelope
+validation remain parent-owned. The worker MUST NOT write task frontmatter,
+immutable `runs/{run-id}.run.yml`, the canonical current-run pointer, decisions.md,
+checkpoint.yml, or any other shared lifecycle state.
+Only the parent/root validates worker evidence and owns those writes.
 
 The implementing teammate stays alive across rounds when possible: round N+1 inherits round N's working memory (task body already read, prior diffs already produced, reviewer JSON already parsed).
 
@@ -73,16 +249,41 @@ If the teammate dies between rounds (compaction, crash, explicit shutdown), a fr
 
 Load the priming bundle before any fix. A fresh agent that skips this step repeats earlier mistakes — the bundle is the round's starting context.
 
-### 3. Iteration limit 3
+### 3. Risk-proportional iteration limit
 
-Maximum 3 review-and-fix rounds per reviewer per task. Rationale: diminishing returns — if 3 rounds cannot resolve findings, the issue requires human judgment. After round 3 with unresolved findings:
+The lean default is one review round. A second round only for unresolved critical or major findings.
+The full path remains capped at three rounds.
 
-- Stop the loop. Do not auto-spawn round 4.
-- Write an `escalations` entry in the state log naming the unresolved finding and the reviewer.
-- Send team lead a message: "Task {task-id} unresolved after 3 review rounds. Escalating."
-- Wait for user decision before any further commits.
+For full-path work, maximum 3 review-and-fix rounds per reviewer per unchanged
+task attempt. After round 3 with unresolved findings, stop that loop; there is
+no round 4. Return deduplicated unresolved findings and reviewers to the parent.
 
-This mirrors the escalation wording in [feature-execution/SKILL.md](../feature-execution/SKILL.md) Escalation section so behavior is consistent across the two skills.
+For a legacy non-atomic task, the parent creates newly scoped remediation tasks
+from unresolved themes, updates dependencies and file ownership, revalidates
+with the manifest guard, and resumes automatically under the existing approval.
+There is at most one remediation generation per `root_blocker_id`. Every replacement and
+descendant inherits that root with `generation: 1` and `bounded_path_used: true`; descendant
+decomposition is forbidden. Same-root failure after replacement R3 is
+`technical-repair-exhausted`; the source loop is not reset or relabeled.
+
+An environment/deferred-evidence blocker (unmet
+engine/image/credential/network/live-access precondition) escalates to the
+user on first fail-closed confirmation per the runtime-contract section
+Bounded fail-closed escape and blocker classification — it is never
+grouped into a remediation task or a coder fix-round.
+
+Set `awaiting_user.active: true` only for a product or acceptance change,
+authority change, external or destructive effect, unavailable required input
+or service, reviewer conflict, or the same atomic root blocker after the
+bounded remediation path is exhausted with no safe alternative. Preserve all
+security, QA, deploy, permission, immutable evidence, and final integration
+gates; no user approval can override unresolved security findings.
+
+An environment/deferred-evidence blocker (unmet
+engine/image/credential/network/live-access precondition) escalates to the
+user on first fail-closed confirmation per the runtime-contract section
+Bounded fail-closed escape and blocker classification — it is never
+grouped into a remediation task or a coder fix-round.
 
 ### 4. Reviewer conflict escalation
 
@@ -90,48 +291,90 @@ Two reviewers can disagree (e.g. `code-reviewer` wants pattern X, `prompt-review
 
 Instead:
 
-- Quote both findings verbatim (file, line, recommendation) into a `conflict` entry in the state log.
+- Return both findings verbatim (file, line, recommendation) to the parent; only the parent
+  writes the `conflict` entry in the canonical state log.
 - Send team lead a message: "Reviewer conflict on task {task-id}: <reviewer A> says X, <reviewer B> says Y. Awaiting decision."
 - Halt fixes for the conflicting area until the user decides.
 - Resume only with the user's chosen direction recorded in the state log.
 
 A teammate who silently sides with one reviewer and ignores the other has bypassed the conflict — that is a protocol violation.
 
+### 5. Durable completion gate
+
+The parent/root orchestrator may complete the task only after all of the following evidence
+is present:
+
+- Every acceptance criterion is verified and the run record contains the verification
+  commands or checks, results, and required smoke or user confirmation evidence.
+- Every declared reviewer has produced its current-round report at
+  `logs/working/task-{task-id}/{reviewer}-round{N}.json`; required reviewer evidence is
+  parsed, all accepted findings are resolved, and no conflict or escalation is open.
+- Required tests and task-specific verification pass against the final changes.
+
+After those checks, only the parent/root executes the immutable run and pointer gate above.
+Reviewer-created reports remain immutable evidence that the parent verifies; it does not
+rewrite them. Later revision allocates a new `run_id`, writes a distinct immutable record
+with `supersedes: <prior-run-id>`, and updates the pointer only after validation. On a
+blocked or escalated result, leave task status `in_progress` and record the reason in
+non-terminal checkpoint/evidence state. Do not update a tech-spec task checkbox.
+
 ## Outputs
 
 After the skill finishes, the following artifacts exist on disk:
 
-- State log: `work/{feature}/logs/{task-id}.run.yml` — single source of truth for this run (see next section).
-- Reviewer JSON reports: `work/{feature}/logs/working/task-{task-id}/{reviewer-name}-round{N}.json`, one per reviewer per round.
-- `decisions.md` entry appended in `work/{feature}/decisions.md` — 1-3 sentence summary plus links to the JSON reports for this task.
-- Git commits: one per fix round (`fix: address review round {N} for task {task-id}`), plus the initial implementation commit (`feat|fix: task {task-id} — {brief}`), plus a final review-reports commit (`chore: review reports for task {task-id}`) following the [feature-execution/SKILL.md](../feature-execution/SKILL.md) commit convention.
+- Worker evidence: one immutable non-terminal
+  `work/{feature}/logs/working/task-{task-id}/{task-id}.worker-result-{attempt-id}.yml` per
+  implementation/fix attempt, written by that worker.
+- Parent-owned immutable terminal record:
+  `work/{feature}/logs/working/task-{task-id}/runs/{run-id}.run.yml`.
+- Parent-owned canonical current-run pointer:
+  `work/{feature}/logs/working/task-{task-id}/{task-id}.run.yml`.
+- Reviewer JSON reports use exactly `logs/working/task-{task-id}/{reviewer}-round{N}.json`
+  relative to `work/{feature}/`, one disjoint report per reviewer per round.
+- Parent-owned `decisions.md` entry appended in `work/{feature}/decisions.md` — 1-3 sentence summary plus links to the worker-result and JSON reports for this task.
+- Parent-owned git commits: implementation, each accepted fix round, and final evidence,
+  all created with path-scoped staging after the worker returns its inventory, diff, and
+  verification results.
 
 Task frontmatter `status` is updated `planned` → `in_progress` at start, `done` at finish (or left `in_progress` on escalation, with the state log explaining why).
 
-## State log path
+## Immutable run schema
 
-Path: `work/{feature}/logs/{task-id}.run.yml`.
+Parent-owned path:
+`work/{feature}/logs/working/task-{task-id}/runs/{run-id}.run.yml`.
 
-Required keys (prose schema — pick reasonable YAML shapes, but every key below must appear):
+Required keys:
 
-- `task_id` — the task identifier matching the filename stem.
-- `teammate` — agent name that executed the task.
+- `run_id` — filesystem-safe and matching the filename stem.
+- `task_id` — the task identifier matching the containing `task-{task-id}` directory.
+- `approval_status` — `approved` before the pointer may select this run.
+- `supersedes` — optional prior run ID; null/omitted for the first run.
+- `teammate` — optional human-readable worker label copied from `teammate_name`; it has no routing, identity, role-binding, or model-binding semantics.
 - `started_at`, `finished_at` — ISO timestamps bracketing the run.
 - `rounds` — list of review rounds; per round capture: round number, reviewers spawned, paths to the JSON reports, summary of findings, summary of fixes, commit hash for the fix.
+- `verification` — acceptance criteria and automated, smoke, or user checks with their
+  command or action, result, and evidence reference.
+- `review_evidence` — canonical current-round report path and disposition for every declared
+  reviewer.
 - `reviewers` — flat list of reviewer agent names that participated (deduped across rounds).
 - `commits` — ordered list of commit hashes produced by this task run, with subject lines.
 - `escalations` — list of escalation entries (each: round number, reason, reviewer(s), unresolved finding, resolution note from user).
 - `conflicts` — list of reviewer conflict entries (each: round number, reviewer A finding quoted, reviewer B finding quoted, user resolution).
 - `final_status` — one of `done`, `escalated`, `blocked`.
 
-The state log is the artifact a future operator reads to reconstruct what happened on this task without rereading every diff. Keep it factual and link-heavy; do not duplicate prose that already lives in `decisions.md`.
+The immutable run is the artifact a future operator reads to reconstruct the selected
+terminal attempt. The current pointer contains only `current_run_id`, `current_run_path`,
+`projected_status`, and `evidence_digest`; it is an atomically replaced projection.
 
 ## Self-Verification
 
 - [ ] Task frontmatter updated: `planned` → `in_progress` at start, `done` at finish (or `in_progress` on escalation).
-- [ ] State log written at `work/{feature}/logs/{task-id}.run.yml` with all required keys.
-- [ ] Each reviewer round produced a JSON report under `work/{feature}/logs/working/task-{task-id}/`.
+- [ ] Worker wrote only unique non-terminal worker-result evidence, not shared or terminal state.
+- [ ] Immutable run written under `runs/{run-id}.run.yml`; the validated current pointer was replaced last.
+- [ ] Each reviewer round produced reports at exactly `logs/working/task-{task-id}/{reviewer}-round{N}.json`.
+- [ ] Verification and reviewer evidence are recorded before `final_status: done`.
 - [ ] `decisions.md` entry appended for this task.
 - [ ] Implementation, fix, and review-reports commits exist on the current branch.
-- [ ] Iteration limit honored (max 3 rounds per reviewer); escalation logged if exhausted.
+- [ ] Iteration limit honored (max 3 rounds per unchanged attempt); in-scope remediation uses newly scoped tasks and manifest revalidation.
 - [ ] Reviewer conflicts (if any) escalated, not silently resolved by the teammate.
+- [ ] No tech-spec checkbox was created or updated for task progress.

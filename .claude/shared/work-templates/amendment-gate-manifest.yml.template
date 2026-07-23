@@ -1,0 +1,61 @@
+# Immutable execution-approval baseline. Write this before owner approval,
+# then bind its exact UTF-8 bytes from execution_approval.
+schema_version: 2
+manifest_id: "{feature}-execution-approval-v1"
+execution_plan_payload_sha256: null
+
+objectives:
+  approved-objective-id:
+    artifact_ref: work/{feature}/tech-spec.md
+    section_ref: "#Approved Objective"
+    section_sha256: null
+    task_ids: [T-001]
+    required_gate_ids: [approved-gate-id]
+
+acceptance_criteria:
+  artifact_ref: work/{feature}/user-spec.md
+  section_ref: "#Acceptance Criteria"
+  section_sha256: null
+
+approved_task_plan_artifacts:
+  - path: work/{feature}/tasks/T-001.md
+    sha256: null
+    objective_ids: [approved-objective-id]
+    task_ids: [T-001]
+    allowed_categories: [task_envelope]
+
+task_file_map:
+  path: work/{feature}/task-files-map.yml
+  sha256: null
+  approved_entries:
+    T-001: []
+
+approved_existing_write_paths:
+  - path: tests/fixtures/example.txt
+    sha256: null
+    objective_ids: [approved-objective-id]
+    task_ids: [T-001]
+    allowed_categories: [fixture]
+
+approved_absent_addable_paths:
+  - path: .claude/shared/scripts/example-runner.ps1
+    objective_ids: [approved-objective-id]
+    task_ids: [T-001]
+    allowed_categories: [runner, verification_mechanism]
+
+gates:
+  approved-gate-id:
+    evidence_schema: terminal-gate/v1
+    evidence_type: application/json
+    evaluator_id: approved-terminal-evaluator-v1
+    source_evidence_types: [process-summary/v1]
+
+classification_policy:
+  evidence_schema: technical-amendment-classification/v1
+  evidence_type: application/json
+  evaluator_id: technical-amendment-scope-evaluator-v1
+
+continuation:
+  command: /do-all-tasks
+  argv: ["{feature}"]
+  digest: null

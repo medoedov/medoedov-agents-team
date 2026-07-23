@@ -115,7 +115,8 @@ Each task contains full information:
 
 Tasks organized by waves; dependencies between waves are logical.
 
-If >15 tasks total — emit a finding recommending split into MVP + Extension.
+For plans over 15 tasks, verify that scheduling/validation is organized in bounded batches.
+Task count is not a lifecycle failure and never justifies merging independent concerns.
 
 ## 7. Sequencing (time-free)
 
@@ -141,6 +142,10 @@ level. The authoritative skills and reviewers catalog is
 - If a task description mentions writing or modifying LLM prompts (keywords: "prompt", "system
   prompt", "LLM prompt", "few-shot", "prompt template") but the task uses `code-writing` skill →
   severity `critical`: "Prompt task should use `prompt-master` skill, not `code-writing`."
+- If `infrastructure-setup` is the only skill for a task that substantially modifies Python,
+  service behavior, or automated tests → severity `major`, category `task_quality`, type
+  `skill_task_mismatch`: split infrastructure from application implementation and assign
+  `code-writing` to the application task.
 - If task `Reviewers` include agents not in the Reviewer Agents table (`code-reviewer`,
   `security-auditor`, `test-reviewer`, `skill-checker`, `prompt-reviewer`,
   `deploy-infra-reviewer`, `documentation-reviewer`) → severity `minor`:
@@ -177,6 +182,18 @@ section 17 (`structural_gap`, severity `critical`) — file the structural_gap t
   names, version numbers) appear in both the Decisions section AND a task description → severity
   `major`: "Duplication between Decisions section and task description for value `{value}`. Keep
   the decision in one place."
+
+### 8d. Atomicity
+
+- Each task has one architectural concern and one independently testable outcome. Mixed
+  application code, service integration, tests, infrastructure, deployment, or documentation
+  concerns → severity `major`, category `task_quality`, type `atomicity`.
+- More than five modified paths is only a review heuristic. Cohesive non-mechanical vertical
+  slices and production code plus its directly owned tests are valid. File count or category mix
+  alone never blocks; a `major` `atomicity` finding requires multiple architectural concerns or
+  independently separable outcomes.
+- A 29-path task spanning Python/services/tests/infrastructure is a canonical blocking failure,
+  regardless of total plan task count.
 
 ## 9. Wave Conflict Detection
 
@@ -308,9 +325,9 @@ cheaper than a false negative that produces a bad artifact. When in doubt, creat
 
 ## Strictness
 
-When a check is ambiguous, create a finding rather than defaulting to `approved`. The author can
-read the finding and decide whether to fix or dismiss; the validator never silently waves things
-through.
+When a check is ambiguous, create a finding rather than defaulting to `approved`. Ordinary
+findings may be reasoned about, but Critical/Major `atomicity` and `skill_task_mismatch` findings
+remain blocking until the task is split or corrected and revalidated.
 
 ## Scope Boundaries
 
@@ -342,7 +359,7 @@ Write the JSON report to `{report_path}` and return the same JSON.
     {
       "severity": "critical | major | minor",
       "category": "frontmatter | structure | standards | risks | verification | tasks | time_estimates | task_quality | wave_conflicts",
-      "type": "gap | partial | scope_creep | structural_gap | shallow_solution | overengineering | underengineering",
+      "type": "gap | partial | scope_creep | structural_gap | shallow_solution | overengineering | underengineering | atomicity | skill_task_mismatch",
       "source": "user-spec | tech-spec | tasks",
       "requirement": "US-3: Push notifications",
       "detail": "Description of the problem",
@@ -371,9 +388,10 @@ validator (example: a wave conflict that also exposes a missing decision).
 
 ### Pass/fail
 
-- `approved` — zero findings with severity `critical`. Major and minor findings are
-  informational.
-- `changes_required` — at least one finding with severity `critical`.
+- `approved` — zero Critical findings and zero Critical/Major findings of type `atomicity` or
+  `skill_task_mismatch`.
+- `changes_required` — at least one Critical finding or one Critical/Major `atomicity` /
+  `skill_task_mismatch` finding.
 
 ### Severity definitions
 
@@ -384,7 +402,8 @@ validator (example: a wave conflict that also exposes a missing decision).
   prompt task using `code-writing` skill.
 - **major** — YAGNI abstraction, missing error handling for `M`/`L` features, unnecessary layers,
   shallow architecture, task-level overengineering, task-brevity violations (overlong
-  description, embedded AC, embedded TDD anchor, line-number references), decisions restated
+  description, embedded AC, embedded TDD anchor, line-number references), atomicity violations,
+  infrastructure-only skill assigned to application implementation, decisions restated
   across Decisions section and task descriptions, duplicated configuration values across
   Decisions and tasks, decisions with no implementing task.
 - **minor** — partial coverage of non-core aspects, debatable infrastructure scope creep,

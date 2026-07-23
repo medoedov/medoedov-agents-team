@@ -8,6 +8,9 @@ command: python .claude/shared/scripts/sync_to_os.py
 Зеркалирует директорию `.claude/` из приватного проекта проекта в публичный репозиторий
 `medoedov-claude-team` с защитой от утечки секретов и project-specific drift.
 
+Read `.claude/shared/pipeline-contract.md` first and follow the `/sync-os` row. Its
+preconditions, durable output/state, completion gate, and next transitions are normative.
+
 ## Когда запускать
 
 - После редактирования агентных файлов (`.claude/agents/*.md`, `.claude/skills/`, `.claude/commands/`)
@@ -31,6 +34,29 @@ generation failure aborts the sync; partial output must never be committed.
 For local Codex use in the private source project, run `/sync-codex` after
 changing the agent system. `/sync-os` independently regenerates the sanitized
 public runtime, so private Project Knowledge cannot leak through generated files.
+
+## Safety workflow and authorization
+
+Preserve the executable declaration `python .claude/shared/scripts/sync_to_os.py` and pass
+the user's command arguments through unchanged; do not reinterpret, reorder, or silently
+drop flags. Before the default mutating sync:
+
+1. Run the staged forbidden-word/secret check and require success.
+2. Run `/sync-os --dry-run`, require exit 0, review the proposed file set, and require zero
+   secret findings before writing the target.
+3. Generate the Codex runtime only inside the already-sanitized target, after substitutions
+   and secret checks. A generation or validation failure aborts before manifest/commit.
+4. Run the mutating sync only within the user's explicit authorization for that target.
+
+The target sync commit, generated manifest, commit hash, and success/secret-check audit are
+the durable state. **Completion gate:** dry-run and secret checks pass, sanitized-target
+generation succeeds, the target commit is complete and clean, and the command reports its
+durable commit hash/audit result.
+
+Creating the authorized target commit is not publication. Never push, publish, open a PR,
+or otherwise update a remote automatically; each such action requires separate explicit
+user authorization. Diagnostic flags and the explicitly requested `--undo` retain their
+documented argument semantics and do not imply publication permission.
 
 ## Флаги
 

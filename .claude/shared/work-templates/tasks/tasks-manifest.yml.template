@@ -1,0 +1,18 @@
+# Durable task-decomposition manifest. The parent orchestrator is the only writer.
+schema_version: 1
+feature: "{feature}"
+status: draft  # draft | approved
+source:
+  user_spec: work/{feature}/user-spec.md
+  tech_spec: work/{feature}/tech-spec.md
+task_count: 0
+tasks: []
+task_files_map: work/{feature}/task-files-map.yml
+validation_reports: []  # immutable {path, sha256}; active approved strict reports only
+cross_task_pass:
+  completed: false
+  unresolved_findings: []
+atomicity_resolutions: []  # source_task_id/source_task_sha256, report_ref: {path, sha256}, finding_id, resolved_by_split, distinct replacement_task_ids
+approval:
+  approved_at: null
+  evidence: null

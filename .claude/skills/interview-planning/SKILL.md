@@ -1,8 +1,8 @@
 ---
 name: interview-planning
 description: |
-  Creates user-spec.md through an adaptive interview with prior-chat seeding, classification
-  gate, mandatory specialist checkpoints, smart routing, and unified validation.
+  Creates or resumes a compact user-spec through risk-proportional discovery,
+  targeted research, explicit approval, and legacy-safe state migration.
 
   Primary trigger: /interview
 
@@ -15,371 +15,386 @@ description: |
 
 # Interview Planning
 
-Thorough adaptive interview → codebase scan → user-spec.md → unified validation → user approval.
-Output: `work/{feature}/user-spec.md` with `status: approved`.
-Log: `work/{feature}/logs/interview.yml` (flat path).
-
-## Interview Style
-
-Conduct the interview in the user's language. Be thorough and opinionated — an engaged
-co-thinker who actively proposes solutions and challenges weak answers.
-
-**How to interview:**
-- Ask 3-4 questions per batch. Run as many batches as needed until the cycle's items are
-  fully covered.
-- Propose solutions based on Project Knowledge: "The architecture.md describes pattern X —
-  I think Y is the right approach here. Agree?"
-- Challenge with substance — concrete counterexamples, code references, unexplored scenarios:
-  "What if the user does Z? Module Q does not handle that case."
-- Accept the answer after one substantive challenge and move on to the next gap.
-- When user says "I don't know": help think through it (examples, common patterns).
-  Optional item → mark TBD. Required item → break into simpler questions.
-
-**Interview depth** depends on feature size (S/M/L in interview metadata):
-- S (1-3 files, local fix): focused interview, core behavior
-- M (several components): moderate depth, integration questions
-- L (new architecture): deep interview, thorough edge cases and risk analysis
-
-## Process
-
-### Specialist Output Contract
-
-These rules apply to every specialist invocation across phases — product-manager (Phase 2),
-ux-designer (Phase 4), Phase 5 routing, and userspec-validator (Phase 6 + Phase 8).
-
-#### Output Gate
-
-Apply this gate whenever a specialist (product-manager, ux-designer, marketer, architect,
-security-auditor) returns findings. Reject the output if ANY of the following is true:
-
-- No `quote` field present in a finding (finding lacks grounding in the artifact).
-- `why` field is generic, missing, or sycophantic (e.g., "good idea but...", "interesting
-  approach", "this is fine overall").
-- Finding is a rephrase of the task description, not a critique.
-- Total findings count is fewer than 3 for Standard-class work.
-
-**Rejection example (valid finding vs. rejected finding):**
-```
-Valid:   {id: f1, severity: major, quote: "users can export", issue: "export format
-          unspecified", why: "CSV and JSON have incompatible tooling expectations — a
-          spreadsheet user vs. a developer will assume a different default"}
-Rejected: {id: f2, severity: minor, issue: "consider adding more formats",
-           why: "good idea but worth thinking about"}
-          → rejected: no `quote`, `why` is generic/sycophantic
-```
+Classify the request first. Direct work leaves this workflow immediately. For lean or full
+work, turn the user's settled intent into a draft `work/{feature}/user-spec.md`, validate it
+once, and obtain explicit user approval before `/tech-plan`. Keep active recovery state
+compact at `work/{feature}/logs/interview.yml`.
+
+Conduct the conversation in the user's language. Be an opinionated co-thinker: propose a
+specific answer when evidence supports one, challenge consequential gaps, and do not repeat
+facts already settled in chat or durable artifacts.
+
+## State contract
+
+New active lean/full interview state uses schema version 2 from
+`.claude/shared/interview-templates/feature.yml`:
+
+- `schema_version: 2`
+- `feature`: the kebab-case feature name
+- `path`: `direct`, `lean`, or `full`
+- `status`: `discovery`, `awaiting_user_spec_approval`, `approved`, `completed`, or
+  `superseded`
+- `summary`: a compact semantic resume summary
+- `decisions`: settled product, scope, and acceptance decisions
+- `open_questions`: only unresolved questions that can still change the product, scope, or
+  acceptance
+- `user_spec.path` and `user_spec.status`: `missing`, `draft`, or `approved`
+- `next_step`: one concrete next action
+- `legacy_history`: the archived legacy interview path, or `null`
+
+Direct work creates no active interview state or user-spec artifact.
+
+The parent is the only writer of active interview state. Update it after a material user
+answer or state transition. Keep raw dialogue and old specialist reports outside the active
+state; they are audit history, not executable workflow instructions.
+
+An approved `user-spec.md` is durable approval evidence. Never reopen, downgrade, or
+overwrite it unless the user explicitly requests a revision.
+
+### Semantic entry forms
+
+Every semantic record lives inside the existing free-form `decisions`, `summary`, or
+`next_step` fields; no new schema field is introduced. Use these entry forms:
+
+- **Outcome record**: the outcome name together with its rationale, its next step, and
+  its resumption trigger, exactly as documented per outcome in Conclude discovery with
+  an outcome.
+- **External fact with its source and date**: a claim that is true independent of this
+  conversation, tagged with where it came from and when.
+- **Hypothesis**: a hypothesis stays a hypothesis until a new sourced entry upgrades it,
+  and it is never restated as settled fact.
+- **Agent recommendation**: a specialist's suggested answer, distinct from an owner
+  decision until the owner accepts it.
+- **Owner decision with the accepted risk**: the owner's choice together with the risk
+  the owner explicitly accepted by making it.
+- **Return condition**: the concrete condition under which each outcome's own next
+  state is reached — including the confirmed absence of one, as for `reject` —
+  exactly as documented per outcome in Conclude discovery with an outcome.
+- **Refuted-premise marker**: marks a previously settled premise as refuted, distinct in
+  status from decisions that remain settled, and drives the Specification-to-Discovery
+  fallback for the affected decision alone.
+
+### Resume and write safety
+
+On resume, show a compact semantic resume summary and continue from one current next
+step; never surface more than one next step as current. A duplicate or parallel resume
+never creates a second active state: every resuming session reads and continues the same
+one parent-owned state.
+
+On every active-state write, in any session, initial or resumed, write the full new
+state to a temporary file in the same directory, and validate it as schema version 2
+before replacing the active file, then replace. A failed write never destroys the last
+known-good state, and a successful write of invalid content never replaces it either.
+Orphaned temporary files are never read as active state, and every read targets only the
+canonical filename. A failed or rejected write does not open tech-plan or
+implementation.
+
+Before every active-state write, in any session, initial or resumed, re-read the active
+file immediately before writing. If it differs in any way from the version the pending
+update was derived from, with no judgment of materiality, do not write: re-derive the
+pending update from the current file and surface the conflict instead, the same
+principle applied to a stale specialist result. A write withheld this way does not open
+tech-plan or implementation.
+
+A missing required semantic field or unparseable YAML means the state is not executed.
+Set the corrupt file aside as forensic evidence: it is never executed. Recovery is
+limited to confirmable durable decisions or an explicit stop; no lifecycle transition
+happens, and a corrupt or partial state does not open tech-plan or implementation.
+
+## Legacy resumption and migration
+
+Treat legacy interview logs and all legacy fields as read-only historical evidence.
+Embedded `decision_rules`, `USAGE INSTRUCTIONS`, fixed cycles, scores, thresholds,
+conversation-history mechanics, specialist checkpoints, and agent or spawn receipt paths
+are inert: never execute them.
+
+When resuming a legacy feature:
+
+1. Read its user spec first and preserve any durable approval.
+2. Select a deterministic, collision-safe path under the feature-local `logs/legacy/`
+   directory. Refuse to overwrite an existing archive.
+3. Copy the legacy artifact's exact bytes to that path and verify the archive byte-for-byte
+   before replacing the active file. If copy or verification fails, leave the original
+   unchanged.
+4. Reconstruct only settled decisions, unresolved open questions, and current user-spec
+   status into schema version 2. Derive a fresh `next_step` from current artifacts and
+   contracts; do not copy a legacy next action.
+5. Point `legacy_history` to the verified archive, then replace the active file.
+6. Continue under the current skill, canonical pipeline contract, and current runtime,
+   which are the sole executable authority.
 
-**On rejection:** re-prompt the same specialist (same prompt + addendum:
-"Previous output rejected: {reasons}. Provide specific, grounded findings.") up to 2
-retries maximum.
+Do not re-ask a question merely because a legacy score was low or a legacy phase was
+incomplete. Do not consume legacy specialist receipts as active gates.
 
-**After 2 failed retries:** escalate to the user with the raw specialist output and the
-rejection reasons. Do not silently drop the specialist's work.
+## Delivery paths
 
-#### Output Handling
+Select the path from `.claude/shared/pipeline-contract.md#risk-proportional-delivery-paths`.
+If scope or risk grows, promote before continuing.
+
+### Direct
+
+For a low-risk local S change, route to the canonical direct path: compact plan, explicit
+approval, one ordinary coder, targeted tests, and one code-reviewer. The direct path does not
+create interview, user-spec, tech-spec, checkpoint, or receipt artifacts. Hand off
+immediately and end the interview workflow.
+
+### Lean
+
+For Standard S and low-risk M work, run one bounded discovery/specification pass:
+
+1. Reuse prior chat, existing artifacts, and already available code research.
+2. Use the one parent-owned clarification budget shared with tech planning: at most one
+   shared batch of no more than five short independent questions.
+3. Ask only about unresolved requirements and acceptance boundaries.
+4. Write the compact user spec and proceed to post-write validation.
+
+### Full
+
+For L, high-risk, or explicitly requested full planning, use at most three purpose-driven
+passes, and only when real complexity requires them:
+
+1. Frame the problem, value, scope, and success conditions.
+2. Refine user flows, acceptance, integration, risks, and operational boundaries using
+   relevant evidence.
+3. Resolve only remaining decision-changing gaps.
+
+The full path may finish earlier. Completion means there are no unknowns that can change
+product, scope, or acceptance; it is never determined by scores, thresholds, filled fields,
+or a fixed number of passes.
+
+## Adaptive modes
+
+The active mode is Discovery, Specification, or Revision. The mode is always derived from
+which of the three gating decisions — problem, scope, and acceptance — are currently
+settled in `decisions`; it is recomputed fresh whenever needed and never stored as a field,
+because schema version 2 is closed and holds no procedural state.
+
+Specification applies once the problem, scope, and acceptance decisions are settled.
+Discovery applies whenever any of those decisions is unsettled: keep asking about the
+decisions that remain open and treat the interview as still gathering requirements.
+Settlement is a plain recorded fact in `decisions`, derived directly from what has already
+been decided, never from a numeric measure.
+
+Revision mode begins only when the owner asks to revise an already-approved user-spec; it
+is never entered automatically and never inferred from a stale legacy signal. Revision
+re-derives which of the three gating decisions the requested change actually unsettles and
+proceeds as Discovery for those decisions alone, leaving every other settled decision
+untouched.
+
+### Specification-to-Discovery fallback
 
-After specialist findings pass the Output Gate, transform 5-15 validated findings into
-3-5 conversational questions per round:
-- Each question ties to a specific finding's `issue` and `suggestion`.
-- Questions are short, contextual, and natural — not yaml dumps.
-- Goal: continue the interview without overwhelming the user.
-
-<example>
-Finding (yaml): {id: f3, severity: major, quote: "users can export", issue: "export format
-  unspecified", suggestion: "specify CSV vs JSON vs both"}
-Question to user: "You mentioned export — should we support CSV, JSON, or both? Different
-  audiences (spreadsheet users vs developers) have different defaults."
-</example>
-
----
-
-### Phase 0: Init
-
-#### Prior-chat seed (Scenario B)
-
-Before loading the interview template, scan the current session chat history. For each item
-in the feature template (see `.claude/shared/interview-templates/feature.yml`), if the user
-has already provided substantive content during free chat — pre-fill that item's `value` and
-`score` (range 60-80% depending on detail level), and mark the gap as
-"verified in chat, may need deepening". Write seeded items to `logs/interview.yml` at init
-time. Skip interview questions for items that are already seeded to threshold.
-
-Prior-chat seeding: existing chat history is scanned to pre-populate interview state before
-Phase 1 begins, using scores in the 60-80% range.
-
-#### Init flow
-
-1. Check for existing interview: look in `work/*/logs/interview.yml` for
-   `metadata.status: in_progress`. If found — load, show discussed topics summary, resume.
-   If multiple found — show list, let user choose.
-2. Get task description: "Describe what you want to build."
-3. Determine work_type (feature / bug / refactoring) from description.
-4. Propose feature name (kebab-case).
-5. **Confirmation Gate:** After the user describes the feature, reply with:
-   > "Understood as: **{name}**. Should I create folder `work/{name}/`? (yes / no / edit-name)"
-
-   Wait for explicit `yes` before invoking `init-feature-folder.sh`.
-   On `no` — abort cleanly, no folder created (Scenario D protection).
-   On `edit-name` — ask for the corrected name, then re-confirm.
-6. After `yes`: run `.claude/shared/scripts/init-feature-folder.sh {name}` — creates folder
-   structure with `logs/interview.yml`.
-7. Update `logs/interview.yml`: set `metadata.started`, `metadata.status: in_progress`,
-   `phase1_feature_overview.feature_name`, `phase1_feature_overview.work_type`. Write seeded
-   items from prior-chat scan.
-
-### Classification Gate
-
-After the user confirms intent and the feature folder is created, classify the work along two
-independent axes before doing anything else.
-
-**Class** (drives whether specialists run at all):
-
-| Class | Criteria | Pipeline |
-|-------|----------|----------|
-| **Trivial** | 1 file scope, no UX changes, no payment, no security-sensitive data | Solo interview; mandatory checkpoints SKIPPED; no specialist routing |
-| **Standard** | Anything else | Full mandatory checkpoints scheme + conditional smart routing |
-
-Trivial implies size S by definition. If work grows beyond one file mid-interview,
-reclassify as Standard.
-
-**Size** (drives interview depth): S / M / L per `interview_depth_policy` in
-`feature.yml`.
-
-Announce the classification and allow the user to override:
-> "Classified as **Standard / M** — full interview with product-manager and ux-designer
-> review. OK?"
-
-If the user explicitly says "trivial" or "standard" — honor the override.
-
-The trivial vs standard classification gate determines which specialist agents run and
-whether mandatory checkpoints fire at all.
-
-### Phase 1: Study Project Knowledge
-
-Read ALL files from `.claude/skills/project-knowledge/references/`. If the directory is
-missing or empty — warn the user and suggest running `/init-project-knowledge` first.
-
-These files are your context for the entire interview. Reference them when asking questions
-and proposing solutions.
-
-### Phase 2: Cycle 1 — General Understanding
-
-**Scope:** `phase1_feature_overview` items in `logs/interview.yml`.
-
-1. Score the user's initial description against all items (detailed 80-95%, brief 50-70%,
-   vague 20-40%, not mentioned 0%). Items already seeded from prior-chat start at their
-   seeded score.
-2. Run the interview loop (see below) on `phase1_feature_overview` items.
-3. During this cycle — determine feature size S/M/L and agree on testing strategy:
-   - S: integration/E2E usually not needed — state why.
-   - M: propose whether integration tests make sense, explain reasoning.
-   - L: propose specific integration and E2E scope with justification.
-
-#### Mandatory checkpoint — product-manager (Standard, size M or L)
-
-After Cycle 1 completes (for Standard-class work of size M or L), spawn `product-manager`
-as a mandatory checkpoint. S features run a short interview without checkpoints because the
-surface is too small for product/UX critique to surface anything new.
-
-- Input: draft sections 1-2 of the emerging user-spec (problem statement, value prop).
-- Task: critique the framing, surface blind spots, name competitor approaches, validate PMF.
-- Run as a single-turn `Agent` call.
-- Apply the Output Gate (Specialist Output Contract above) before consuming findings.
-- Transform validated findings → 3-5 conversational questions for the next interview round
-  (see Output Handling in Specialist Output Contract above).
-
-### Phase 3: Code Scanning
-
-Launch `code-researcher` subagent (Task tool, opus) with feature path and feature description
-from Cycle 1.
-
-After the subagent completes — read `{feature_path}/code-research.md`. Use findings in
-Cycle 2 questions.
-
-If during later phases a gap is discovered — launch `code-researcher` again with the specific
-question to investigate.
-
-### Phase 4: Cycle 2 — Code-Informed Refinement
-
-**Scope:** `phase2_user_experience` + `phase3_integration` items.
-
-1. Summarize understanding: "I understand the task as: [X]. My implementation approach: [Y,
-   based on code findings]."
-2. Questions based on code findings: "Found module X which does Y — should we reuse it?"
-3. Cover deploy and user actions (items `deploy_approach`, `manual_user_actions`):
-   - "Are there manual steps required to launch? (create a bot, get API keys, configure
-     a service, register somewhere)"
-   - "How should this be deployed? What needs to be configured? (existing CI/CD, new setup,
-     manual deploy)"
-   - "How do we verify it works after deploy? (tools, curl, manual check)"
-   - "What can be verified during development without a deploy? (call external API locally,
-     run locally, check config, test the prompt)"
-4. Run interview loop on phase2 + phase3 items.
-
-#### Mandatory checkpoint — ux-designer (Standard, size M or L, UI/UX only)
-
-After Cycle 2 completes, if the feature has any user-visible interface changes (for
-Standard-class work of size M or L):
-- Spawn `ux-designer` as a mandatory checkpoint.
-- Input: description of UI flows, interaction patterns discovered in Cycle 2.
-- Task: review flows, surface friction points, suggest alternative patterns.
-- Run as a single-turn `Agent` call.
-- Apply the Output Gate (Specialist Output Contract above) before consuming findings.
-- Transform validated findings → 3-5 conversational questions for the next round.
-
-### Phase 5: Cycle 3 — Review and Finalize
-
-**Scope:** ALL items across all phases still below threshold.
-
-Cleanup pass: revisit anything not fully covered in Cycles 1-2. Deepen edge cases and error
-scenarios — probe for scenarios the user has not considered, even if items formally passed
-threshold.
-
-Run interview loop on remaining gaps.
-
-#### Smart routing (Phase 5 specialists)
-
-After Cycle 3, spawn additional specialists when the following conditions are met. Multiple
-triggers → multiple specialists in parallel. Always announce before spawning:
-"Asking {specialist} for input — about 30 seconds."
-
-Triggers: marketer on paid feature, architect on L feature, security-auditor on sensitive
-data.
-
-| Trigger | Specialist | Condition |
-|---------|-----------|-----------|
-| Paid feature | `marketer` | Feature involves subscriptions, payments, limits, or pricing changes |
-| L feature | `architect` | Feature is size L, introduces new architecture, or spans a new microservice |
-| Sensitive data | `security-auditor` | Feature handles PII, auth tokens, secrets, or payment data |
-
-Smart routing applies to Standard-class work only; for Trivial class, skip all smart
-routing.
-
-Apply the Output Gate (Specialist Output Contract above) to each specialist's findings
-before consuming them. Transform validated findings → 3-5 conversational questions per
-specialist per round.
-
-### Phase 6: Completeness Check
-
-Launch `userspec-validator` subagent (Task tool) with feature path. It reviews
-`logs/interview.yml` against PK files and `code-research.md`.
-
-Input: `logs/interview.yml` (interview is the artifact under review at this stage;
-user-spec.md does not exist yet). Goal: gate ready-to-write.
-
-- `needs_more` → ask the suggested questions, re-run
-- `complete` → proceed to Phase 7
-
-### Phase 7: Create User Spec
-
-1. Copy template to working file:
-   - Copy `.claude/shared/work-templates/user-spec.md.template` → `work/{feature}/user-spec.md`
-   - Edit sections one by one using Edit tool, replacing placeholders with interview data.
-   Reason: the agent sees the template structure and comments while editing each section,
-   preventing drift from template format.
-2. Content rules:
-   - "What we are doing" — self-contained, understandable without reading the interview.
-   - "Why" — concrete user value, not vague improvement claims.
-   - Acceptance criteria — testable, no "works correctly".
-   - Every discussed topic from the interview must appear in the spec.
-3. If the feature seems large (>10 criteria, >3 user flows, >5 integrations) — suggest
-   splitting.
-
-Git commit: `draft(userspec): create user-spec for {feature}`
-
-### Phase 8: Validation
-
-Run `userspec-validator` (single agent, three dimensions: quality / adequacy / completeness).
-It returns a unified findings list in one combined JSON report.
-
-Input: `user-spec.md` (post-write artifact). Goal: gate ready-to-approve. Same agent,
-different artifact — Phase 6 catches missing interview coverage, Phase 8 catches drift
-introduced during spec authoring.
-
-**`userspec-validator`** is the single merged validator (Wave 3 Task 9). `userspec-validator`
-is the only validator for user-spec quality, adequacy, and completeness — it merged three
-previous single-dimension validators in Wave 3 Task 9.
-
-**Handling findings:**
-- Obvious issue → fix silently.
-- Borderline → discuss with user.
-- Disagree with finding → reject with reasoning.
-- Conflict across dimensions → adequacy findings take priority over quality findings on
-  substance vs form disputes.
-
-After each validation round (validator ran + fixes applied), git commit:
-`chore(userspec): validation round {N} — {summary of fixes}`. Re-run `userspec-validator`.
-Max 3 iterations, then show remaining issues to the user.
-
-### Phase 9: User Approval
-
-Show `user-spec.md` link + validation summary. If changes requested — edit and show again.
-
-When approved:
-1. Set `user-spec.md` frontmatter `status: approved`.
-2. Set `logs/interview.yml` `metadata.status: completed`.
-3. Git commit: `chore(userspec): approve user-spec for {feature}`
-4. Suggest `/tech-plan {feature-name}` as the next step.
-
-## Interview Loop
-
-Runs inside each cycle. Repeats until the cycle's scope is fully covered.
-
-```
-1. Find gaps: required items in current scope with score < 85%. Lowest score first.
-2. Ask 3-4 questions about different gaps. Reference PK and code findings.
-3. User responds.
-4. Update logs/interview.yml:
-   - conversation_history: add full Q&A entry
-   - Item: score, value, gaps, status
-   - metadata: last_updated, current_question_num
-   - Save immediately after every response.
-5. Check stop criteria (BOTH must be true):
-   a) All required items in scope score >= 85%
-   b) Structural: every required item has non-empty value,
-      no TBD in value, gaps empty or only conscious limitations
-6. Not done → step 1. Done → exit cycle.
-```
-
-Scoring: detailed answer 80-95%, brief 50-70%, vague 20-40%, not mentioned 0%.
-Prior-chat seeded items start at their seeded score (60-80%).
-
-Optional items: cover when the user mentions relevant context or when naturally connected
-to required items.
-
-## Work Type Adaptations
-
-All three cycles apply to any work_type, but focus shifts:
-
-**Bug:** Cycle 1 → reproduction steps, expected vs actual, severity, when it broke.
-Code scanning → find bug location and root cause. Cycle 2 → fix approach, regression risks.
-
-**Refactoring:** Cycle 1 → current problems, target architecture, stability guarantees.
-Code scanning → current structure, dependencies, test coverage.
-Cycle 2 → migration path, backward compatibility.
-
-## Scope Changes
-
-If understanding changes significantly during the interview:
-- Update affected scores downward, add new gaps.
-- Reassess feature size (S/M/L).
-- If work_type changes (was feature, actually bug) — pivot items accordingly.
-- Note the change in `logs/interview.yml` notes section.
-- If reclassifying from Trivial to Standard — activate mandatory checkpoints going forward.
-
-## Self-Verification
-
-- [ ] Prior-chat seed applied: items from existing chat history pre-filled at 60-80% score
-- [ ] Confirmation Gate passed: user explicitly said yes before `init-feature-folder.sh` ran
-- [ ] Classification set: Trivial or Standard (announced + user acknowledged)
-- [ ] All three cycles completed: Cycle 1 (phase1 items >=85%), Cycle 2 (phase2+phase3 items
-      >=85%), Cycle 3 (cleanup pass on residual gaps)
-- [ ] Mandatory checkpoints invoked: product-manager after Phase 2 (Standard + M/L),
-      ux-designer after Phase 4 (Standard + M/L + UI/UX)
-- [ ] Output Gate applied to all specialist findings
-- [ ] Smart routing specialists consulted where triggered (Phase 5) — Standard only
-- [ ] `userspec-validator` passed (or issues resolved with user) — three dimensions
-- [ ] `user-spec.md` filled with real content (no placeholders)
-- [ ] User approved, frontmatter `status: approved`
-- [ ] `logs/interview.yml` `metadata.status: completed`
-- [ ] All log files at flat path `work/{feature}/logs/interview.yml` (flat, no subdirectory nesting)
-- [ ] Suggested `/tech-plan` as next step
+A previously settled premise can later be refuted by new evidence. When a settled premise
+is refuted, drop back from Specification to Discovery for the affected decision only.
+Preserve every unrefuted decision exactly as already recorded. Mark the refuted premise
+stale in `decisions`, distinct in status from the decisions that remain settled. Do not
+re-ask closed questions whose settled decisions were never refuted. Do not open tech-plan
+while any gating decision tied to a refuted premise remains unsettled.
+
+## Purpose-based workflow
+
+### 1. Classify and exit direct
+
+Before creating a feature folder or any interview artifact, classify the request against the
+canonical delivery paths. If it is direct, create no interview state or user-spec artifact:
+immediately hand off to the canonical compact-plan/direct workflow and end the interview
+workflow.
+
+### 2. Initialize or migrate lean/full
+
+For lean/full only, summarize the understood feature name and ask whether to create
+`work/{feature}/`. Create nothing until the user confirms. If the invocation was accidental,
+answer normally and stop. Initialize schema version 2, or perform the safe legacy migration
+above, only after confirmation.
+
+### 3. Discover decision-changing requirements
+
+Seed the summary and decisions from substantive prior chat and durable evidence. Ask only
+about unresolved requirements that can change product, scope, or acceptance, within the
+selected path budget. Do not persist clarification, pass, or procedural counters in active
+state.
+
+### Conclude discovery with an outcome
+
+Every discovery pass ends in exactly one of five observable outcomes: `pursue`, `reject`,
+`park`, `reshape`, or `experiment_first`. Only `pursue` creates a draft user spec; the other
+four outcomes never create a draft user spec, and no outcome by itself opens `/tech-plan` or
+implementation. Each outcome maps onto the existing fixed `status` enum with no new field
+added, documented per outcome below. Record rationale, next step, and return condition as
+semantic entries in `decisions`/`next_step`.
+
+**`pursue`.** Rationale: the problem, scope, and acceptance decisions are settled and worth
+committing to a user spec. Next step: proceed through Draft-and-validate — write the draft
+user spec, run one post-write `userspec-validator`, and only after that validation completes
+does active status become `awaiting_user_spec_approval` with `user_spec.status: draft`. This
+`awaiting_user_spec_approval` transition is a post-validation end state, never an outcome-time
+transition that bypasses keeping discovery open until post-write validation completes. Return
+condition: if the post-write validator raises a decision-changing finding, return to discovery
+for that finding alone before a targeted revalidation.
+
+**`reject`.** Rationale: the underlying problem or opportunity does not justify further
+product work. Next step: set active status to `completed`, record the refusal reason, and
+confirm there is no next product step to pursue. Return condition: nothing reopens a
+`completed` interview; a resurfaced idea starts a brand new interview instead.
+
+**`park`.** Rationale: the idea has genuine value, but a competing priority or a missing
+precondition blocks it right now. Next step: stay in `discovery` and record the stop reason.
+Return condition: resume discovery once the recorded blocking condition is resolved.
+
+**`reshape`.** Rationale: the discussed direction does not hold up, but a different framing of
+the same underlying need does. Next step: stay in `discovery` and record the new direction
+formulation. Return condition: resume discovery once the owner confirms the reshaped direction
+is the one to pursue.
+
+**`experiment_first`.** Rationale: a decision-changing assumption is unresolved, and evidence
+would settle it faster than continued discussion. Next step: stay in `discovery` and record a
+testable hypothesis, a bounded experiment, and the expected evidence that would settle it.
+Return condition: resume discovery once the bounded experiment produces its expected evidence.
+
+### 5. Draft and validate
+
+Copy `.claude/shared/work-templates/user-spec.md.template` to
+`work/{feature}/user-spec.md` and replace placeholders with self-contained content. Make
+acceptance observable and testable without inventing implementation detail. Keep active
+status `discovery` and `user_spec.status: draft` until one current post-write
+`userspec-validator` has run. Apply clear findings through the bounded corrective flow in
+Worker scheduling.
+
+### 6. Approval handoff
+
+After validation, set active status to `awaiting_user_spec_approval` and show the draft and
+validation summary to the user. Requested changes keep the spec draft. On explicit approval,
+set the user-spec frontmatter and active `user_spec.status` to `approved`, set active status
+to `approved`, and suggest `/tech-plan {feature}`.
+
+Use `completed` when the interview itself has no successor action, and `superseded` when a
+named successor or current runtime correction replaces the feature. Record that successor in
+`next_step`; never create tech-spec or task artifacts for a superseded interview.
+
+## Intent and evidence
+
+For lean/full, apply the confirmation step in Purpose-based workflow before creating a
+feature folder.
+
+Seed the active summary and decisions from substantive prior chat. Inspect relevant Project
+Knowledge and repository facts before asking the user for discoverable information.
+
+Use code research only when repository structure, existing behavior, feasibility, or an
+integration boundary can change the requirements. Use external research only when current
+market, product, legal, pricing, or other time-sensitive evidence can change the decision.
+
+When a needed source is unavailable, record an explicit unknown rather than guessing: the
+explicit unknown does not turn into a fact and does not authorize an unsanctioned
+transition. Offer only the allowed continuations for that unknown: targeted research, a
+bounded experiment, an owner-accepted assumption, `park`, or `reject`.
+
+Label every entry as one of four distinct categories: an external fact, a hypothesis, an
+agent recommendation, or an owner decision. An external fact records both a source and a
+date; the absence of a source cannot be presented as a verified fact. Each category is
+preserved verbatim on every state rewrite. A resume summary may not restate a hypothesis or
+agent recommendation as fact. An entry upgrades to a stronger category only through a new
+entry with its own source and date; agent agreement is never external verification.
+
+When the owner disagrees with a recommendation, record both positions, the supporting
+evidence for each, and the accepted risk of proceeding. Disagreement is not approval: the
+user-spec stays `draft` until a separate, explicit approval, and recording the disagreement
+never substitutes for that approval.
+
+Ask one question for a dependent decision. A lean shared batch may contain up to five short
+independent questions. On the full path, group only genuinely independent questions and stop
+as soon as the remaining unknowns cannot change product, scope, or acceptance.
+
+## Worker scheduling
+
+The parent schedules ordinary `product-manager`, `ux-designer`, `marketer`, `architect`,
+`code-researcher`, and `userspec-validator` roles as native fixed-role, bounded,
+single-turn workers through the current runtime. Give each worker named specialist role
+instructions and the minimum artifact context. Workers never schedule children.
+
+Ordinary planning specialists and the userspec-validator require no authorization handshake
+and no filesystem receipt. Do not request or claim a model override without enforceable
+binding evidence. A missing or unverified preferred model is not a reason to invent a
+fallback or ask for a magic approval phrase.
+
+Run code research and specialists only on a real trigger:
+
+- `code-researcher`: repository facts can change scope, acceptance, or feasibility
+- `product-manager`: product value, prioritization, or product trade-offs are unresolved
+- `ux-designer`: a user-visible flow has material usability uncertainty
+- `marketer`: positioning, channel, pricing, or market evidence can change the decision
+- `architect`: feasibility or architecture can change product scope or acceptance
+- `security-auditor`: sensitive data, authentication, payment, or a security boundary is in
+  scope
+
+A specialist result that predates a changed decision is rejected: treat it as audit
+history, not current input, without mutating active state and without opening a
+lifecycle stage. Schedule a fresh specialist call only when its trigger still holds
+against the current decisions. A rejected stale result does not open tech-plan or
+implementation.
+
+A read-only `security-auditor` consultation is an ordinary fixed-role single-turn worker
+with no authorization handshake or filesystem receipt. Only a result that authorizes a
+protected high-risk lifecycle gate uses the runtime authorization and receipt protocol.
+
+After writing the draft, run one post-write `userspec-validator`. Apply clear findings in at
+most one targeted corrective pass, then run at most one targeted revalidation. Return
+unresolved product choices to the user.
+
+This ordinary single-turn rule does not weaken operational or security receipt requirements.
+Gitleaks or other secret access, native elevation, destructive work, data migration, deploy,
+fencing, DNS, VPS promotion, production effects, and high-risk lifecycle-gate-producing
+results retain the authorization, receipt, owner-authority, and native-permission safeguards
+of the runtime and pipeline contracts. Product approval, owner authority, and native
+permission are separate decisions.
+
+## Work-type focus
+
+- Bug: reproduction, expected versus actual behavior, severity, regression boundary, and
+  observable fix acceptance.
+- Refactoring: current problem, target guarantees, compatibility, migration risk, and
+  behavior-preserving acceptance.
+- Feature: user problem, value, scope, user flow, constraints, risks, and observable success.
+
+## Self-verification
+
+- [ ] The path was classified before creating any interview artifact; direct exited.
+- [ ] Lean/full intent was confirmed before creating a feature folder.
+- [ ] Active state parses as schema version 2 and contains only compact semantic state.
+- [ ] Legacy instructions and receipts were treated as inert history.
+- [ ] The selected direct, lean, or full path stayed within its clarification/pass budget.
+- [ ] Research and specialists ran only for real decision-changing triggers.
+- [ ] One post-write userspec validation ran, with no more than one targeted correction and
+      one targeted revalidation.
+- [ ] No product, scope, or acceptance-changing question remains hidden.
+- [ ] Draft remained in discovery until validation, then awaited explicit user approval.
+- [ ] Approved user specs were preserved unless revision was explicitly requested.
+- [ ] Operational, security, owner-authority, receipt, and native-permission gates remained
+      intact.
+- [ ] The active mode was derived from currently settled problem, scope, and acceptance
+      decisions, never read from a stored field.
+- [ ] A refuted premise preserved every unrefuted decision, marked the premise stale, and did
+      not reopen closed questions.
+- [ ] Each of the five discovery outcomes — pursue, reject, park, reshape, and
+      experiment_first — is documented with a distinct rationale, next step, and return
+      condition.
+- [ ] Only pursue created a draft user spec; no outcome by itself opened `/tech-plan` or
+      implementation.
+- [ ] The outcome-to-status mapping matched the fixed status enum, and pursue's
+      `awaiting_user_spec_approval` was reached only as a post-validation end state, never an
+      outcome-time transition.
+- [ ] Every recorded entry is labeled as an external fact, a hypothesis, an agent
+      recommendation, or an owner decision, and that label survives every state rewrite
+      unless a new sourced entry upgrades it.
+- [ ] Owner disagreement is recorded with both positions, supporting evidence, and the
+      accepted risk, and is never presented as approval of the user spec.
+- [ ] Unavailable evidence is recorded as an explicit unknown with only the allowed
+      continuations offered, never as a fact or a hidden transition.
+- [ ] Resume showed a compact semantic resume summary and continued from one current
+      next step; a duplicate or parallel resume used the one parent-owned state.
+- [ ] Every active-state write was atomic (temporary file, schema-v2 validation before
+      replace) and was preceded by a re-read-before-write check, in any session.
+- [ ] A corrupt or partial state was never executed and was set aside as forensic
+      evidence.
+- [ ] A stale specialist result was rejected without mutating active state or opening a
+      lifecycle stage.
+- [ ] No failure scenario and no non-`pursue` outcome opened tech-plan or
+      implementation.

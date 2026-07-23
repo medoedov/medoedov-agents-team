@@ -14,7 +14,10 @@ description: |
 
 ## What Is This
 
-A structured development approach for AI agents. Every feature goes through a pipeline: idea → spec → architecture → tasks → implementation → documentation update. Each stage has automated validators and quality gates. QA and deploy are regular tasks in the tech-spec, not separate pipeline steps.
+A structured development approach for AI agents. Full-path work goes through:
+idea → spec → architecture → tasks → implementation → documentation update.
+Direct and lean work use the bounded routes below. QA and deploy are regular
+full-path tech-spec tasks rather than separate pipeline steps.
 
 Core problems it solves:
 - **Context loss between sessions** — distributed knowledge base persists across sessions
@@ -26,9 +29,27 @@ Core problems it solves:
 
 ## Development Pipeline
 
-The full path from idea to production. Each step has a command, a skill behind it, and validators.
+Delivery uses three risk-proportional paths:
 
-### Step 1: User Spec — `/interview`
+- **Direct path:** low-risk local S work uses compact plan + approval, one
+  ordinary single-turn coder, targeted tests, and one code-reviewer.
+- **Lean spec path:** Standard S and low-risk M reuse prior evidence, use one
+  clarification batch, compact specs, two default technical validators, and
+  one corrective pass.
+- **Full path:** L, high-risk, or explicitly requested work uses the complete
+  lifecycle below.
+
+Ordinary single-turn coder and read-only reviewer calls need no receipt or
+authorization handshake. Privileged/high-risk operations retain those
+safeguards. The **lean budget stop-loss** routes oversized auxiliary
+orchestration helpers or focused suites to simplification/design review instead
+of automatically adding tests or review cycles.
+
+The detailed lifecycle below is full-path only. Direct and lean paths execute
+through `/write-code`; lean planning shares one parent-owned clarification budget
+across interview and tech planning and stops after its compact approvals.
+
+### Step 1: User Spec — `/interview` (full-path lifecycle)
 
 **What:** Structured interview to capture requirements in human-readable form (Russian).
 
@@ -47,7 +68,7 @@ The full path from idea to production. Each step has a command, a skill behind i
 
 **Skill:** `interview-planning`
 
-### Step 2: Tech Spec — `/tech-plan`
+### Step 2: Tech Spec — `/tech-plan` (full-path lifecycle)
 
 **What:** Technical architecture, decisions, testing strategy, implementation plan.
 
@@ -57,8 +78,13 @@ The full path from idea to production. Each step has a command, a skill behind i
 - Asks technical clarification questions
 - Copies tech-spec template, edits sections in place → `tech-spec.md` with architecture (including Shared Resources for heavy objects like ML models, DB pools), decisions, testing strategy, brief Implementation Tasks (scope only — AC and TDD are added during task-decomposition) → git commit draft
 - Implementation Tasks include Verify-smoke (executable checks: curl, python -c, docker) and Verify-user (manual UI/UX checks) fields where applicable
-- Last two waves are always Audit Wave (3 parallel auditors: code, security, test) and Final Wave (QA + deploy)
-- 4 validators run in parallel (up to 3 iterations):
+- Every code change keeps `code-reviewer`; `code-simplifier` runs only for a
+  broad refactor or flagged complexity/readability
+- A conditional, risk-based Feature Audit Wave may precede the Final Wave according to the [catalog policy](../tech-planning/references/skills-and-reviewers.md#risk-based-feature-audit-policy); Final QA is mandatory even when the audit wave is skipped
+- 4 validators run in bounded batches that fit the available slots (up to 3
+  iterations). With the configured cap of five including the root, all four may
+  run concurrently only when live runtime availability reports four confirmed free child slots;
+  otherwise use smaller batches:
   - `reality-checker` — detects non-existent files, functions, APIs (mirages)
   - `techspec-validator` — bidirectional requirements traceability, over/underengineering, solution depth, template compliance, task quality, wave conflict detection
   - `security-auditor` — OWASP Top 10 review
@@ -70,17 +96,17 @@ The full path from idea to production. Each step has a command, a skill behind i
 
 **Skill:** `tech-planning`
 
-### Step 3: Task Decomposition — `/split-tasks`
+### Step 3: Task Decomposition — `/split-tasks` (full-path only)
 
 **What:** Break tech-spec into atomic task files.
 
 **Process:**
-- For each Implementation Task in tech-spec, `task-creator` agent copies task template and fills it (parallel)
+- For each Implementation Task in tech-spec, a `task-creator` agent copies the task template and fills it; creators run in bounded batches that fit available child slots
 - Each task file expands brief tech-spec scope into: acceptance criteria, TDD anchor (from Testing Strategy), context files, skills, reviewers, wave, dependencies → git commit draft
-- 2 validators run in parallel (up to 3 iterations):
+- 2 validator types run in bounded batches (up to 3 iterations):
   - `task-validator` — template compliance, content quality
   - `reality-checker` — validates against actual codebase (file existence, feasibility)
-- Cross-task integration check: both validators re-run on all tasks together — catches shared resource conflicts, duplicate heavy resource init, hidden dependencies (max 2 extra iterations)
+- Cross-task integration check: run exactly one cross-task pass with both validator perspectives over the complete manifest. Fix reported tasks and individually re-validate only those changed tasks; do not run another cross-task validator pass
 - Git commit after each validation round
 - User approves → git commit approval
 
@@ -91,9 +117,17 @@ The full path from idea to production. Each step has a command, a skill behind i
 ### Step 4: Implementation
 
 **Choose `/do-task` when:** single task, manual control, debugging, iterating on one piece.
-**Choose `/do-all-tasks` when:** multiple tasks ready, standard feature work, want parallel execution.
+**Choose `/do-all-tasks` when:** multiple approved tasks are ready and independent work can be scheduled safely.
 
 Two modes:
+
+In both modes, the parent/root is the exclusive git index and commit writer.
+Workers return scoped diffs, verification results, and immutable non-terminal
+worker results. Only the parent validates ownership and gates, uses path-scoped staging
+for every implementation, fix, and evidence commit, and terminalizes
+the immutable run. Supporting projections and the immutable record are written first; the
+canonical current-run pointer is atomically replaced after validation. The pointer is
+written last.
 
 #### Mode A: Single Task — `/do-task`
 
@@ -103,9 +137,9 @@ One task per session. Suited for manual, controlled execution.
 - Reads task file and all its Context Files
 - Loads skills specified in task (e.g. `code-writing`, `pre-deploy-qa`, `infrastructure-setup`)
 - Follows loaded skill workflow (TDD for code tasks, verification for QA tasks, etc.)
-- Git commit implementation (code + tests pass)
+- Worker returns the implementation diff and passing test evidence; the parent commits it
 - Runs reviewers specified in task (if any), up to 3 review iterations
-- Git commit after each round of review fixes (tests pass)
+- Parent commits each accepted review-fix round after path-scoped validation
 - Writes entry to `decisions.md`, updates task status → done
 - Git commit status + decisions
 
@@ -113,22 +147,23 @@ One task per session. Suited for manual, controlled execution.
 
 #### Mode B: Full Feature — `/do-all-tasks`
 
-All tasks via agent teams. Team lead orchestrates waves of parallel work.
+All tasks are executed through parent-orchestrated waves of isolated workers.
 
 **Process:**
-- Team lead reads tech-spec and all task files, builds execution plan
-- Checks `checkpoint.yml` — if resuming after context compaction, skips completed waves (uses decisions.md as source of truth for what actually completed)
-- Creates team via TeamCreate
+- Parent reads the approved specs, task manifest, file map, and task files; builds a bounded execution plan and obtains explicit approval
+- Checks durable task result artifacts when resuming; `checkpoint.yml` supports routing but is not terminal proof
 - Executes tasks wave by wave:
-  - Spawns one agent per task (parallel within wave)
-  - Each teammate: follows loaded skill workflow, runs smoke verification if task has Verify-smoke (before reviews), commits code (tests pass), sends diff to reviewers, fixes findings with commits per round (max 3 rounds), commits review reports
-  - Each teammate writes `decisions.md` entry
-  - Lead commits status updates (task frontmatter + decisions.md) after wave completes, updates `checkpoint.yml`
-- **Audit Wave** (always present): 3 auditors run in parallel (code-reviewer, security-auditor, test-reviewer) — review all feature code holistically. Issues found → lead spawns fixer agent, auditors become reviewers (max 3 fix rounds)
-- **Ad-hoc agents**: when lead needs work outside planned tasks (fixing audit findings, escalations), assigns matching skill + reviewers based on work type
-- **Final Wave**: QA (always), deploy + post-deploy (if applicable)
+  - Parent spawns bounded isolated workers with explicit role instructions and only the minimal task context, using the current runtime primitive
+  - Workers run in parallel only for independent tasks with disjoint declared files; overlap is serialized and total active workers never exceed available slots
+  - Each worker follows its loaded skill, runs required verification, and returns its scoped diff plus immutable non-terminal worker-result evidence
+  - Parent coordinates reviewers, aggregates result artifacts, owns shared durable state, commits wave status, and updates `checkpoint.yml`; children do not use shared team state or nested fan-out
+- **Feature Audit Wave** (conditional and risk-based): use only the audit tasks selected by the catalog policy above. When multiple audits are selected, the parent uses bounded batches under the shared configured-cap/live-slot formula. Auditors write disjoint reports; the parent aggregates findings and coordinates bounded fix rounds. This is the only feature-level audit pass
+- **Ad-hoc workers**: when work outside planned tasks is required, parent assigns an explicit role, matching skill, minimal context, disjoint output, and reviewers based on work type
+- **Final Wave**: Final QA is mandatory; deploy + post-deploy remain conditional
 - **Escalation**: after 3 failed fix rounds — stop, report to user, write decisions.md entry, wait for decision
-- User reviews results, team shuts down, `checkpoint.yml` deleted
+- User reviews results; parent records terminal durable state and releases runtime workers. A checkpoint is retained or archived according to the pipeline contract, not treated as completion evidence
+
+Runtime adapters may map workers to Claude teammates, Codex subagents, or another supported primitive. The methodology does not require shared team state, and it makes no model override claim unless the active runtime exposes and confirms that capability.
 
 Tasks can be code, user-action, deploy, config, or verification. Task nature is determined by its skill + description, not a separate type field.
 
@@ -211,19 +246,26 @@ Commit after each step where the repository state is stable and meaningful. Not 
 
 - **Planning stages** (user-spec, tech-spec, tasks): draft commit → validation round commits → approval commit
 - **Single task execution** (do-task): implementation commit (tests pass) → review fix commits (tests pass) → status/decisions commit
-- **Feature execution** (do-all-tasks): teammates commit code + review fixes, lead commits statuses per wave
+- **Feature execution** (do-all-tasks): workers return scoped changes and evidence; the parent commits accepted code, review fixes, and statuses per wave
 - **Finalization** (done): single commit with PK updates + archive
 
-### Spec-Driven Development
+### Spec-Driven Development (full-path only)
 Write specifications before code. The hierarchy: User Spec → Tech Spec → Tasks → Code. Code starts only after specs are approved.
 
-### Validation at Every Stage
+### Validation at Every Stage (full-path only)
 - User spec: 1 unified validator (userspec-validator — quality + adequacy + completeness in one pass)
-- Tech spec: 4 validators (reality-checker + techspec-validator + security + test)
-- Tasks: 2 validators (template + reality)
-- Code: 3 reviewers (code + test + security) + smoke verification (API calls, library checks, MCP tools, local runs)
-- Audit Wave: 3 auditors (code + security + test) review all feature code holistically after implementation waves
-- QA tasks: pre-deploy QA (tests + acceptance criteria), post-deploy QA (verification on live environment)
+- Tech spec: 4 validators (reality-checker + techspec-validator + security + test), scheduled in bounded batches within available child slots
+- Tasks: 2 validator types (template + reality), with bounded task-creator and validator batches plus exactly one cross-task pass
+- Code: every code change has `code-reviewer`; `code-simplifier` and other
+  specialists run only on matching triggers
+- Feature Audit Wave: conditional and risk-based; its selected audit tasks come from the catalog policy above and run in bounded batches within confirmed free child slots
+- Final QA is mandatory. Post-deploy QA verifies the live environment only when applicable
+
+No planning, validation, or feature-audit batch may exceed runtime capacity. This project
+uses a configured cap of five. For every bounded batch, calculate
+`confirmed free children = min(configured cap - current active agents (including root),
+live runtime reported free child slots, explicitly named workload-specific cap)`. Schedule
+only within confirmed free child slots and live runtime availability.
 
 Max 3 fix iterations at each stage.
 
@@ -237,7 +279,12 @@ Agent reads only what's needed for current task, not everything. Task files list
 Agent uses Context7 MCP to fetch current library documentation instead of relying on training data. Used during tech-spec research and code implementation.
 
 ### Checkpoint Recovery
-Feature execution persists state to `checkpoint.yml` after each wave. A `SessionStart(compact)` hook detects context compaction during long feature executions and injects recovery context — the lead resumes from the next pending wave using checkpoint + decisions.md as source of truth.
+Feature execution persists recovery metadata after each wave. `checkpoint.yml` and
+`decisions.md` provide routing and context only. After compaction, the parent resolves each
+canonical current-run pointer to its contained immutable approved run before selecting
+dependency-ready unfinished work. Immutable `runs/{run-id}.run.yml` records are terminal
+task evidence; `{task-id}.run.yml` is only the current pointer, and `feature-status.yml` is
+terminal evidence for the feature. Neither checkpoint nor decisions can prove completion.
 
 ---
 
@@ -258,7 +305,7 @@ Feature execution persists state to `checkpoint.yml` after each wave. A `Session
 |-------|---------|
 | `code-writing` | TDD cycle: plan → tests → code → review |
 | `prompt-master` | LLM prompt engineering: write, improve, verify prompts |
-| `feature-execution` | Team lead dispatches agents by wave; teammates commit own code, lead commits statuses |
+| `feature-execution` | Parent dispatches isolated workers by wave; workers return evidence, parent aggregates and commits statuses |
 | `pre-deploy-qa` | Pre-deploy acceptance testing: tests + acceptance criteria |
 | `post-deploy-qa` | Post-deploy verification on live environment via MCP tools |
 
@@ -285,7 +332,7 @@ Feature execution persists state to `checkpoint.yml` after each wave. A `Session
 
 ## Agents
 
-Agents are isolated subprocesses with fresh context. They receive input, do one job, return structured output.
+Agents are isolated workers with fresh context. The parent spawns a bounded set through the current runtime primitive, gives each explicit role instructions and minimal context, and requires a structured result artifact. Parallel work is limited to independent, disjoint tasks; the parent aggregates outputs and owns all shared state. Workers do not spawn more workers. Runtime-specific model selection is optional and must not be claimed unless supported.
 
 ### Validators (run during spec/task creation)
 - `userspec-validator` — unified validator: document quality, solution feasibility, interview completeness (3 dimensions in one pass; merged from 3 predecessors in Wave 3)
@@ -296,6 +343,8 @@ Agents are isolated subprocesses with fresh context. They receive input, do one 
 
 ### Reviewers (run during/after code writing)
 - `code-reviewer` — code quality across 10 dimensions
+- `code-simplifier` — behavior-preserving simplification, triggered by broad
+  refactors or code-reviewer complexity/readability findings
 - `test-reviewer` — test quality analysis with concrete fixes
 - `security-auditor` — OWASP Top 10, auth, input validation
 - `prompt-reviewer` — prompt quality against prompt-master principles
@@ -322,7 +371,7 @@ Agents are isolated subprocesses with fresh context. They receive input, do one 
 | `/tech-plan` | Research → tech-spec.md |
 | `/split-tasks` | Tech-spec → task files |
 | `/do-task` | Execute single task with quality gates |
-| `/do-all-tasks` | Execute all tasks via agent teams |
+| `/do-all-tasks` | Execute approved tasks through parent-orchestrated isolated workers |
 | `/done` | Update PK, archive feature |
 | `/write-code` | Ad-hoc coding with TDD and reviews |
 | `/init-project` | Initialize new project with template, git, GitHub |
@@ -335,10 +384,10 @@ Agents are isolated subprocesses with fresh context. They receive input, do one 
 **New project:**
 `/init-project` → `/init-project-knowledge` (interview + fill all docs) → start features
 
-**New feature:**
+**New feature (full path):**
 `/interview` → `/tech-plan` → `/split-tasks` → `/do-all-tasks` or `/do-task` → `/done`
 
-**Ad-hoc coding (no spec):**
+**Direct or lean implementation:**
 `/write-code`
 
 To understand how a specific skill works internally, read its SKILL.md directly.

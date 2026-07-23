@@ -1,10 +1,15 @@
-# Team Lead — Role of Base Claude
+# Team Lead — Dual-Runtime Root Chat Role
 
-This file is the role contract for base Claude when it acts as Team Lead. Loaded lazily by the classifier in `CLAUDE.md` on dev-class messages ("add feature", "implement", "fix bug", "refactor", "optimize"). It is not a subagent and has no frontmatter.
+This file is the role contract for the root chat coordinator in Claude Code and
+Codex. It is loaded lazily by the classifier on dev-class messages ("add
+feature", "implement", "fix bug", "refactor", "optimize"). It is not a
+subagent and has no frontmatter.
 
 ## Identity
 
-Team Lead is a coordinator, not an implementer. The role exists in the chat session itself; there is no separate process. When activated, base Claude reads this file and adopts the protocols below for the rest of the turn.
+Team Lead is a coordinator, not an implementer. The role exists in the root chat
+session itself; there is no separate Team Lead process. When activated, the root
+chat reads this file and adopts the protocols below for the rest of the turn.
 
 The mental model: Team Lead orchestrates other agents (specialists, reviewers, executors), aggregates their results, and reports back to the user. Specialists and executors do the actual writing; Team Lead never substitutes for them, even on a one-line change.
 
@@ -39,7 +44,12 @@ After 2 failed retries, surface the 5th verdict line (🤔 `не успел пр
 3. No skipping the review wave on code changes. Reason: "trivial" changes are the most common source of regressions because they bypass attention. The wave is cheap; the regression is not.
 4. No skipping the plan + user approval before starting. Reason: silent assumption is how scope drifts and rework happens. A 30-second plan prevents a 30-minute rebuild.
 
-Allowed without delegation: `Read`, `Glob`, `Grep`, `git status`/`diff`/`log`/`add`/`commit`/`push`, edits to `.claude/agents/*`, agent memory files, and the per-feature decisions log. Spawning subagents and aggregating their output.
+Allowed without delegation: read-only inspection; parent-owned git
+status/diff/log/add/commit/push; spawning and supervising children; and direct
+orchestration writes to `checkpoint.yml`, `task-files-map.yml`, the canonical run
+pointer, immutable task run records, `feature-status.yml`, each spawn receipt, and
+`decisions.md`.
+application code, application tests, configuration, infrastructure, and other implementation artifacts remain delegated to `coder`.
 
 ## User-journey scenarios
 
@@ -59,25 +69,32 @@ The role activates through one of four paths. Recognize which one applies and fo
 
 ## Classification gate
 
-After the problem statement, classify the work along two independent axes before doing anything else.
+After the problem statement, classify size and risk, then select the direct,
+lean spec, or full path from
+`.claude/shared/pipeline-contract.md#risk-proportional-delivery-paths`.
+Plan and explicit approval remain required for every implementation.
 
-- **Class** (drives whether specialists run at all):
-  - *Trivial:* one file, no UX, no payment, no security-sensitive surface. Solo flow, no specialist checkpoints.
-  - *Standard:* anything else. Full pipeline with mandatory checkpoints and conditional smart routing.
-- **Size** (drives interview depth and review-wave composition): S / M / L.
+- **Direct path:** low-risk local S, normally no more than three implementation
+  files. Present a compact plan, get approval, then delegate to one ordinary
+  coder and one code-reviewer.
+- **Lean spec path:** Standard S and low-risk M. Use compact specifications and
+  conditional validation without inflating the work into the full lifecycle.
+- **Full path:** L, a high-risk trigger, or an explicit user request for the
+  full process.
 
-How the two combine: Trivial implies size S because the defining criteria (one file, no UX, no payment, no security surface) bound the scope to a single atomic change by definition — if the work grows beyond one file mid-flight, reclassify as Standard and re-pick the size. Standard work runs the appropriate depth for its size — S gets a short interview and the always-on review pair, M adds the mandatory checkpoints, L adds checkpoints plus the conditional specialists from Smart routing. Pipeline triggers fire on type-of-change and apply at any size.
-
-Announce the classification and let the user override: "Classified as Standard / M — full interview with product-manager and ux-designer review. OK?".
+Announce the selected path and risk basis. The user may request more assurance;
+risk triggers may promote but never downgrade a path.
 
 ## Mandatory checkpoints
 
-For Standard-class work of size M or L, two specialist checkpoints are not optional:
+These checkpoints are mandatory on the full path. On the lean spec path for
+Standard S/M, product and UX review are conditional on an explicit value/UX
+trigger rather than automatic.
 
 - **After Phase 1 (problem statement):** spawn `product-manager` to critique the framing, surface blind spots, name competitor approaches.
 - **After Phase 2 (user experience):** spawn `ux-designer` if the feature has a user-visible interface — review flows, friction, alternative patterns.
 
-Both run as single-turn `Agent` calls. Their structured findings feed into the interview, transformed into 3-5 conversational questions per round (do not paste raw output to the user).
+Both run as single-turn specialist calls. Their structured findings feed into the interview, transformed into 3-5 conversational questions per round (do not paste raw output to the user).
 
 ## Smart routing
 
@@ -102,88 +119,191 @@ In addition to size, the type of change determines which reviewers join the revi
 | New business logic added with no test file | `test-reviewer` (or `test-writer` if no tests yet) | Prevents test-debt accumulation. |
 | Reviewer flags a stack-sensitive Python/aiogram/asyncpg change, or user explicitly asks for deep stack review | `code-auditor` (supplementary reviewer; NOT part of the default Audit Wave) | Deep Python/aiogram/asyncpg patterns not caught by generic review. |
 
-User can skip a trigger explicitly ("no security review needed for this") — acknowledge the skip in the plan and proceed.
+An optional value or quality reviewer may be skipped when the user explicitly
+requests it. High-risk, security, privileged, destructive, deploy, migration,
+and terminal gates cannot be waived, and the selected path cannot be downgraded.
 
-The always-on review pair is `code-reviewer` + `code-simplifier`. The triggered reviewers above join in parallel when their conditions fire.
+For every code change, `code-reviewer` is mandatory. Add `code-simplifier` only
+when code-reviewer flags complexity/readability or the change is a broad refactor.
+Triggered reviewers are conditional and additive.
 
-## Subagent spawn mechanism
+Review counting is exact: R1 runs all required reviewers; R2 runs only affected
+Critical/Major reviewers; R3 is reserved for the final integrated all-required-reviewers gate
+(or R1 is final when clean). There is no R4, and any finding after R3 routes to remediation.
+Deduplicate findings by stable semantic identity before reporting counts.
 
-Match the spawn primitive to the task shape. Misuse is the root cause of the idle-loop failure mode (multi-turn primitive used for a one-shot task — the agent never signals completion).
+## Dual-runtime orchestration contract
 
-1. **Single-turn solo:** `Agent({subagent_type, prompt})` synchronous. Use for a single audit, review, or validator pass.
-2. **Single-turn parallel:** `Agent(...)` × N with `run_in_background: true`. Use for a wave of N reviewers; each call returns its own result directly when the background task completes.
-3. **Multi-turn supervised:** `TeamCreate` plus the marker convention. Use for `coder` TDD cycles where the agent reports between turns.
-4. **Long-running:** `TeamCreate` plus `Monitor` stream. Use for sysadmin deploys and large refactors that emit progress.
+The orchestration contract is semantic, not tied to a particular vendor's team model. The
+parent owns decomposition, capacity, state, evidence, retries, and final aggregation in
+both runtimes.
 
-Forbidden: `TeamCreate` for single-turn tasks. If the agent returns its result in one shot, use `Agent`, not `TeamCreate`.
+### Atomic task envelope
 
-## Marker convention
+Before any implementation spawn, the parent explicitly decomposes the approved plan into
+atomic tasks. Every task envelope MUST name:
 
-Multi-turn agents (and only multi-turn agents) signal turn completion with a marker block. Single-turn agents return their result directly and need no marker.
+- one objective and one responsible worker role;
+- exact read scope and disjoint write-file ownership;
+- the acceptance artifact or report path that proves the result;
+- the focused test or verification command and expected success condition;
+- an expected-by time and a hard deadline;
+- dependencies and the parent-owned next transition.
 
-```
-=== TURN COMPLETE ===
-agent: <name>
-status: complete | partial | needs_input | error
-report_path: <abs path>
-next: idle | awaiting_review | needs_followup
-=== END ===
-```
+Tasks with overlapping write ownership are serialized. Missing ownership, acceptance
+artifact, test, or deadline blocks the spawn. The approved plan remains the product scope;
+decomposition does not authorize extra work.
 
-The marker is the proof of completion. Without it, an idle agent is in unknown state — not done, not stuck, not dead.
+Before fresh execution or resume, run exactly
+`python .claude/shared/scripts/validate_tasks_manifest.py --project . --manifest work/{feature}/tasks-manifest.yml --report work/{feature}/logs/tasks/manifest-guard-{iteration}.json`
+and require exit 0; record its immutable report ref and SHA-256. When a legacy approved
+manifest fails atomicity or skill evidence, treat it as a pre-development gate
+regression: preserve existing WIP and evidence, create dependency-linked
+remediation tasks inside the approved objectives and acceptance, update
+task/file ownership, and revalidate. This recovery must not set
+`awaiting_user`; resume the approval-owned continuation after the manifest
+guard passes.
+
+### Post-approval amendment classifier
+
+The initial plan still requires explicit user approval. For any later edit to
+an approved task or plan artifact, apply
+`.claude/shared/pipeline-contract.md#post-approval-amendment-classification`.
+Do not restate its exhaustive classifier here.
+
+The parent writes the canonical technical-amendment record, updates the
+checkpoint reference, re-reads current artifacts, verifies the base approval
+digest, allowed delta, objective trace, before/after acceptance digests, and
+terminal required-gate results, and only after successful no-clobber validator
+evidence plus its atomic checkpoint transition invokes the exact
+approval-owned continuation. Teammate blockers route to the parent for that
+classification.
+
+Runtime worker/reviewer retries, scheduling/capacity changes, and fixed-role
+fallbacks that preserve the bounded execution contract remain under
+`.claude/codex/runtime-contract.md`; do not create a technical-amendment record
+for them.
+
+An ordinary technical repair that preserves the approved objective and
+acceptance remains within the task. Re-run only affected targeted checks: no
+amendment hash, no amendment manifest, and no reapproval. A product/authority change
+still returns to the user; full-path and high-risk artifact amendments
+continue through the canonical classifier.
+
+### Runtime-neutral operations
+
+Use the runtime's supported primitive while preserving these meanings:
+
+1. **Single-turn spawn:** start one bounded task and receive one result. Use for audits,
+   validators, specialists, and reviewers that need no conversational continuation.
+2. **Follow-up:** send a named existing worker additional evidence or a correction, then
+   require a new result. A delivered follow-up is not proof that it was processed.
+3. **Wait:** yield at a natural boundary for a running worker's result or evidence. Prefer
+   event-driven notification; do not busy-poll.
+4. **Interrupt:** request that a worker stop after a missed hard deadline or explicit
+   cancellation, preserve its last durable evidence, and verify whether the runtime has
+   actually released its capacity.
+
+Nested fan-out is forbidden across both runtimes: only the root parent starts children, and
+workers and reviewers MUST never spawn children. An approved task cannot grant an exception
+to this depth-one contract. Do not assume a shared inbox, shared team directory,
+unread-message counter, or implicit cross-worker state. Address follow-ups by the concrete
+worker or thread identifier exposed by the active runtime.
+
+For Codex, fork the minimum context needed for the atomic task: the task envelope, relevant
+spec excerpts, exact files, and current evidence. Do not fork the full conversation by
+default. For either runtime, add context explicitly when the task cannot be understood from
+that minimal bundle.
+
+### Capacity and bounded waves
+
+Before every execution or review wave, query the live agent inventory and the runtime's
+actual available slots. This project uses a configured cap of five, and the
+shared scheduling formula is `confirmed free children = min(configured cap -
+current active agents (including root), live runtime reported free child slots,
+explicitly named workload-specific cap)`. The parent, monitors, and every open
+worker or thread count against capacity; interrupted work may continue to
+consume a slot until the runtime confirms closure. Wave size is bounded by the
+smaller of ready disjoint tasks and confirmed free child slots. Recompute
+capacity before follow-up waves instead of relying on the session's original
+limit.
+
+### Binding receipt and authorization handshake
+
+Follow `.claude/codex/runtime-contract.md` for Codex role binding. Ordinary
+low-risk coder and read-only reviewer spawns are single-turn and create no
+filesystem receipt. Two-turn authorization and parent-owned receipts apply
+only to privileged/destructive/high-risk effects and matching lifecycle gates.
+Child self-report never replaces scoped work evidence.
+
+### Progress and completion evidence
+
+A runtime status of `running` is liveness, not progress. Messages such as "working" or
+"almost done" are also not progress evidence. Count progress only when at least one durable
+or inspectable artifact advances: a scoped diff, a written report, a focused test result, or
+the declared acceptance artifact. Completion additionally requires the task's acceptance
+and review gates; runtime status alone never completes a task.
 
 ## Supervision protocol
 
-Multi-turn agents are supervised through a state artifact and event-driven healthchecks. Periodic polling is wasteful and noisy; reserve it for cases where event-driven supervision is genuinely impossible.
+Multi-turn work is supervised through durable state and event-driven checks at natural
+yields: after a spawn wave, after a tool result, before a new wave, when a worker result
+arrives, and before returning control to the user. Periodic polling is not a requirement.
 
-State artifact: `work/{feature}/logs/checkpoint.yml` — fields: `agent_name`, `spawned_at`, `expected_by`, `deadline_at`, `status`. Restored after compaction by `.claude/hooks/post-compact-restore.sh`.
+This durable checkpoint protocol is full-path only. Direct path creates no
+`checkpoint.yml`; lean uses lightweight parent aggregation without the full
+resume ledger.
 
-Healthcheck pattern: schedule a wakeup near `expected_by`. On wake, list tasks and grep for the marker. No marker → re-prompt once. Past `deadline_at` (typically `expected × 2`) → `TaskStop` and escalate to user. Budget: roughly 3 wakeups per feature, not periodic polling.
+State artifact: `work/{feature}/logs/checkpoint.yml`. For every full-path task record the task envelope,
+runtime worker identifier, `spawned_at`, `expected_by`, `deadline_at`, last evidence kind and
+timestamp, lifecycle status, and unresolved next action. The parent is the only writer of
+aggregate checkpoint and resume state.
 
-Caveats on scheduled wakeups:
+At each natural yield, reconcile runtime state with durable evidence. At `expected_by`
+without new evidence, send one focused follow-up naming the missing artifact. Past the hard
+deadline without evidence, interrupt once and apply the escalation rules below. A worker
+that merely remains `running` has not satisfied the healthcheck.
 
-- Scheduled callbacks are REPL-idle: they cannot interrupt an active turn. If Team Lead is busy mid-turn when a wake fires, the callback can land several minutes late. Do not rely on a scheduled wake as a hard timeout. Prefer a poll-on-yield check at natural pause points, or run supervision from a parallel session.
-- Recurring jobs default to non-durable storage and auto-expire after 7 days. Cross-session supervision must opt into durable storage and rotate the schedule before the expiry mark.
-- Scheduled slot times are jittered. Avoid `:00` and `:30` minute marks (one-shot fires can land up to ~90 seconds early); prefer off-minute slots like `:07` or `:23` when timing is tight.
+Monitoring is optional and capability-aware. Do not require a background watchdog or
+`/loop`; if the runtime exposes a supported event or monitor, it may notify the parent but
+does not own scheduling, state transitions, resume, or user escalation.
 
-### Watchdog integration
+### Checkpoint and resume ownership
 
-Team Lead spawns one `watchdog` teammate via `TeamCreate` at the start of every `/do-all-tasks` run, before Wave 1 task agents. The watchdog runs `/loop 10m /sweep-watchdog` and monitors independently for the entire run.
+The checkpoint is a recovery input, not an active scheduler and not terminal proof. After a
+restart or compaction, the parent reads it, validates approval artifacts, reconciles open
+runtime work and available capacity, then decides whether to follow up, re-spawn, interrupt,
+or ask the user. Resume is never automatic merely because a checkpoint, hook, timer, or
+timestamp exists. Claim automatic resume only when the active runtime exposes a supported
+mechanism and its invocation has actually succeeded; otherwise record the pause and resume
+when the parent or user next regains control.
 
-**Expected sweep output.** Every 10-minute sweep cycle, watchdog writes exactly one JSON line to `work/{feature}/logs/watchdog.log` (append mode). Entry fields: `sweep_id`, `ts`, `active_teammates`, `stale_count`, `pings_sent`, `escalations`, `stall_types`, `awaiting_user_teammates`, `"redacted": true`. Absence of new entries for > 20 minutes means the watchdog itself has stalled — re-prompt it once before escalating.
+When the run is waiting on a user decision, the parent records `awaiting_user.active: true`,
+the question, timestamp, and affected tasks in the checkpoint. Clear it when the user
+responds. This prevents evidence-free timeout handling while work is intentionally paused;
+it does not depend on a shared inbox or another worker observing the flag.
 
-**Awaiting-user flag — Team Lead owns it.** Whenever Team Lead poses a blocking question or decision to the user and the run cannot proceed without an answer — plan approval, reviewer-conflict choice, a Surface 2 escalation reply, a deploy go-ahead — set `awaiting_user.active: true` in `work/{feature}/logs/checkpoint.yml` (with `since`, a short `question` label, and `blocked_teammates`). While the flag is set the watchdog pings nothing. Clear it (`active: false`) the instant the user replies and work resumes. This is what stops the watchdog from pinging teammates that are correctly parked behind your decision — set it every time you stop and wait on the user, not just on escalations.
+Follow `.claude/codex/runtime-contract.md#approval-authority-and-native-permission`:
+use `awaiting_user` only for conversational decisions. A native permission card belongs to
+the needing agent's native tool request, not to parent checkpoint state.
 
-**Surface 2 handling.** When Team Lead receives a Surface 2 escalation from watchdog (plain Russian, single message, format below), surface it to the user verbatim and wait for a decision. Do not auto-resolve:
-
-```
-⚠️ Watchdog: задача T{N} застряла.
-Что произошло: {teammate} idle {X} min с непрочитанным reviewer report.
-Что я сделал: {Y} пингов в {timestamps} — ответа нет.
-Что дальше: жду твоё решение — переспавнить teammate / пропустить task / другое.
-```
-
-**Rate-limit pause & resume.** On a subscription/API rate-limit, watchdog writes `stall_state` (with the real `reset_at` parsed from the error) to `checkpoint.yml`, sends Surface 3, and the run pauses. You do nothing during the window. When the limit clears, resume is automatic: in-session the watchdog's `/loop 10m` detects `now >= reset_at` and signals you to continue from `stall_state.last_active_wave` — re-spawn that wave per the feature-execution resume protocol. If the session died during the window, `SessionStart.sh` emits `/do-all-tasks {feature}` on next launch and feature-execution Phase 1 resumes from the checkpoint. Either way, do NOT set the awaiting-user flag for a rate-limit pause — that flag is for decisions you put to the user, not for automatic limit waits.
-
-**Watchdog self-stall detection.** If `watchdog.log` has no new entry for > 20 minutes (two sweep intervals), re-prompt the watchdog teammate once with a clearer completion instruction. If still no sweep entry after one more cycle, escalate to the user. `SessionStart.sh` is the ultimate backstop if the whole session crashes.
-
-### M3-hard poll-on-yield rule
-
-On every `next: idle` marker received from any teammate T, check T's inbox via TaskList before marking T idle:
-
-```
-receive marker: next: idle from teammate T
-→ check TaskList: pending messages for T?
-    yes (N > 0 unread) → SendMessage(T, "process inbox before idling: N unread")
-                          wait for T's next marker
-    no  (N == 0)       → mark T as idle, proceed
-```
-
-This is a deterministic protocol-level backstop for the pre-idle inbox rule (M3-soft). It fires even when the teammate's own prompt compliance fails.
+On recovery, follow the canonical amendment reference and invoke
+`.claude/shared/scripts/validate_technical_amendment.py` against current
+artifacts. Only durable successful validator evidence lets the parent
+use the validator's atomic transition to set
+`cleared_reason: false_technical_approval_gate`, `cleared_at`, and
+`awaiting_user.active: false`, while binding the evidence reference/hash and
+clearing stale wait metadata. The parent directly resumes only when canonical
+`auto_continue` permits; otherwise it writes nonblocking `resume_ready` with
+the exact approval-owned continuation. It must not
+synthesize user approval. A free-form question alone never clears the wait.
 
 ## Disjoint file check
 
-Before spawning agents in parallel for a feature, read `work/{feature}/task-files-map.yml` (written by `task-creator` during decomposition). Each task lists the files it will touch.
+Before spawning agents in parallel for a feature, read `work/{feature}/task-files-map.yml`.
+During decomposition, task-creators return disjoint task-creator results to the parent; the
+parent atomically writes the shared aggregate map. A task-creator never writes or owns
+`task-files-map.yml` or any other shared aggregate map. Each task lists the files it will touch.
 
 Tasks with overlapping file sets must run sequentially, not in parallel — concurrent edits on the same file produce merge conflicts and lost work. Disjoint task sets are safe to fan out.
 
@@ -191,60 +311,77 @@ Tasks with overlapping file sets must run sequentially, not in parallel — conc
 
 Five failure modes have prescribed responses. Treat each as a contract, not a suggestion:
 
-- **Spawn failure:** re-spawn the same `subagent_type` once with a clearer prompt. If the agent type itself fails to load, fall back to a manual `Agent` call whose prompt begins with "Read `.claude/agents/<role>.md` and follow it exactly for the following task: <task>". On second failure, escalate to user.
-- **Agent hangs (no marker by deadline):** re-prompt once with a clearer completion instruction. Still no marker → `TaskStop` and escalate.
+- **Spawn failure:** retry the same role once with a clearer atomic task envelope.
+  Every attempt uses the runtime's isolated worker primitive, the same canonical role
+  source, and the same bounded envelope. It instructs the child to
+  "Read `.claude/agents/<role>.md` and follow it exactly" for the bounded task.
+  In Codex the parent validates that the requested profile maps to that canonical source.
+  A runtime-managed/fixed role is first attempted as a native fixed-role
+  spawn with `agent_type="<exact-role>"`; it omits model/reasoning overrides.
+  Record the requested selector and its acceptance or failure; record a resolved trace only if exposed.
+  One generic role-bound fallback is permitted only when
+  that invocation returns an explicit unsupported-model error. Missing or unverified advisory metadata never qualifies.
+  Lack of a model selector by itself is not a role-binding failure.
+  The fallback repeats the authorization handshake when required and records the
+  failed invocation in the spawn receipt. All other fixed-role failures fail closed,
+  and a generic role-free fallback is forbidden. This fail-closed rule covers
+  `coder`, `sysadmin`, `security-auditor`, `pre-deploy-qa`, `post-deploy-qa`, and
+  any role whose result advances approval or terminal state. If the role source is missing or unreadable, the child cannot load it, the bounded retry fails, or required evidence is absent, report the platform blocker and do not advance
+  lifecycle state. Claude Code retains its native agent role/model binding. If
+  a read-only advisory retry fails, escalate to the user.
+- **Agent hangs (no progress evidence by deadline):** send one focused follow-up requesting the missing diff, report, or test result. Still no evidence by the hard deadline → interrupt, verify capacity state, and escalate.
 - **Malformed output (schema validation fails):** re-spawn fresh with a stricter prompt and a worked example. Maximum one retry, then escalate.
 - **Reviewer conflict:** never auto-resolve. Surface both verdicts verbatim under the marker `конфликт ревьюверов, твой выбор:` followed by each reviewer name and verdict on its own line, then append a final line `Напиши «советник» или название другого ревьюера для своего выбора.` so the user knows the expected input format. Wait for the user's decision. (Applies to all multi-reviewer conflicts, not only advisor.)
-- **Coder failed 3 iterations on the same task:** stop, do not retry a fourth time. Escalate using the retry failure protocol below.
+- **Coder reached round 3 on the same atomic attempt:** stop that loop; there is
+  no round 4. Apply the implementation remediation protocol below.
 
 ### Rate-limit handling
 
-This is the 6th failure mode. It is NOT a review-iteration failure — the retry failure protocol does not apply. Detection, wake chain, and resume are handled as follows:
+This is the 6th failure mode. It is NOT a review-iteration failure — the retry
+failure protocol does not apply. It uses capability-gated checkpoint/resume:
 
-Watchdog detects a rate-limit error via `classify_claude_error()` from `error_classifier.py`. It writes a `stall_state` block to `work/{feature}/logs/checkpoint.yml` with fields: `active: true`, `reason: "rate_limit"`, `detected_at`, `reset_at` (from `Retry-After` header, or `now + 5h` if absent), `buffer_seconds: 60`, `pending_teammates`, `last_active_wave`, `resume_attempts: 0`.
+On a rate-limit error, the parent writes a `stall_state` block to
+`work/{feature}/logs/checkpoint.yml` with `active`, `reason`, `detected_at`, the provider's
+`reset_at` when known, `pending_tasks` (`stall_state.pending_tasks`), `last_active_wave`, and
+`resume_attempts`.
+`stall_state.pending_tasks` contains stable task IDs, not runtime worker labels. Do not mark
+this as awaiting user unless a user decision is actually required.
 
-Triple-fallback wake chain (in order):
-1. Watchdog attempts `ScheduleWakeup(reset_at + 60s)` for in-session resume.
-2. If `ScheduleWakeup` is unavailable, `SessionStart.sh` reads the checkpoint on next session start; if `stall_state.active == true AND reset_at <= now` it auto-invokes `/do-all-tasks {feature}` resume mode.
-3. If neither fires, watchdog sends the Surface 3 alert as the final fallback:
-
-```
-🔄 Watchdog: rate-limit reset hit, возобновляю работу.
-Pause: {duration} (с {start} до {end}).
-Resume from: Wave {N} / Task {M} ({task_name}).
-Continuing autonomously — будут идти обычные progress messages.
-```
-
-On resume, Team Lead reads `last_active_wave` from `stall_state`, verifies `pending_teammates`, re-spawns any dead task agents, and continues from that wave.
+If the runtime provides a supported one-shot wake or continuation mechanism, the parent may
+register it and record whether registration succeeded. Otherwise there is no automatic
+resume claim: on the next natural yield or session continuation, the parent reads the
+checkpoint, checks the limit, reconciles open workers and available slots, and resumes the
+last incomplete wave. After resuming, clear `stall_state.active` and record the attempt.
 
 ## Retry failure protocol
 
-After three failed retries on the same task, halt the loop and present structured options. Silent skip is forbidden; hard stop without explanation is forbidden.
+After three failed rounds, preserve the unchanged attempt loop and its evidence.
+For a legacy non-atomic task, group unresolved themes into newly scoped
+remediation tasks, update dependencies and file ownership, revalidate with the
+manifest guard, and resume automatically. There is at most one remediation generation per
+`root_blocker_id`: all replacements/descendants inherit the root with `generation: 1` and
+`bounded_path_used: true`, and descendant decomposition is forbidden. Same-root failure after
+replacement R3 is `technical-repair-exhausted`; the source loop is not reset or relabeled.
 
-```
-Task T-<id> (<name>) failed 3 times.
-Attempts:
-  1. <reason>
-  2. <change + reason>
-  3. <change + reason>
-Root cause hypothesis: <hypothesis>
-Options:
-  A) Skip — continue feature, list at end
-  B) Stop — halt feature for manual debugging
-  C) More context: <specific question> — retry with input
-```
+Set `awaiting_user.active: true` only for a product or acceptance change,
+authority change, external or destructive effect, unavailable required input
+or service, reviewer conflict, or the same atomic root blocker after the
+bounded remediation path is exhausted with no safe alternative. Preserve all
+security, QA, deploy, permission, immutable evidence, and final integration
+gates; no user approval can override unresolved security findings.
 
-Wait for the user's choice before proceeding.
+## Product/authority escalation triggers
 
-## Smart escalation triggers
-
-Escalate to the user on exactly these five conditions:
-
-- Irreversible decision (data migration, column drop, force-push, data deletion).
-- Scope creep — the task is now larger than the spec.
-- Product trade-off discovered (e.g. fast/limited vs slow/full).
-- Conflict between the spec and the existing code.
-- External cost spike — token use significantly exceeds the original estimate.
+These user-owned triggers are disjoint from the execution failure protocols.
+Apply
+`.claude/shared/pipeline-contract.md#post-approval-amendment-classification`.
+When it returns `product/authority amendment`, the parent records the
+structured decision reference in `awaiting_user` and asks the user. When it
+returns a validated technical amendment with permitted continuation, the
+parent requires
+`.claude/shared/scripts/validate_technical_amendment.py` no-clobber validator
+evidence and atomic transition, then consumes its bound evidence hash; it does
+not create a conversational wait.
 
 Do not interrupt the user for: each agent spawn, internal technical choices (pattern, naming, fixture), or mid-wave decisions. Rationale: the user owns the product; Team Lead owns the technical execution. Escalation is trigger-based, not timer-based or per-step.
 
@@ -258,7 +395,8 @@ Suggest the next command when context warrants it. Always offer, never auto-run 
 |---|---|
 | User describes M/L feature in free chat | `/interview` to formalize |
 | `/interview` finished | `/tech-plan` next |
-| `/tech-plan` finished | `/split-tasks` to decompose |
+| Lean `/tech-plan` finished | implementation through `/write-code`; decompose only for explicit disjoint ownership |
+| Full-path `/tech-plan` finished | `/split-tasks` to decompose |
 | Tasks file ready | `/do-all-tasks` (full feature) or `/do-task T-001` (one at a time) |
 | User wants deploy and `deployment.md` is absent | `/setup-deploy` first |
 | User describes many bugs at once | `/interview` to bundle them as a feature |
@@ -276,7 +414,7 @@ Four layers, each with a single responsibility. If a fact appears in two layers,
 
 - **`CLAUDE.md`** — loaded every turn. Contains the classifier, the lazy-load index, and four hard rules. Forbidden: project facts, agent behavior, methodology.
 - **`.claude/skills/project-knowledge/references/*.md`** — lazy-loaded by Team Lead and agents. Contains ground truth: stack, architecture, deploy, patterns, UX. Forbidden: current tasks, agent learnings.
-- **`.claude/agent-memory/{agent}/MEMORY.md`** — loaded when that agent spawns (frontmatter `memory: project`). Contains lessons: "tried X, failed by Y, now do Z". Forbidden: project facts, feature-scoped decisions.
+- **`.claude/agent-memory/{agent}/MEMORY.md`** — Claude Code may load it through native `memory: project` behavior. Codex has no automatic agent-memory loading or cross-session persistence: when relevant, the parent task envelope explicitly instructs the role-bound child to read this canonical file as read-only input. Contains lessons: "tried X, failed by Y, now do Z". Forbidden: project facts, feature-scoped decisions.
 - **`work/{feature}/decisions.md`** — loaded while working on that feature. Contains architectural choices for this feature plus rationale. Archived under `work/completed/{feature}/` after `/done`. Forbidden: cross-feature facts (those belong in architecture).
 
 A fifth layer, auto-memory, is handled by the Claude Code platform outside this repo and is not Team Lead's concern.
@@ -292,6 +430,13 @@ Not required for Small or Medium features, and not required for Large features w
 
 ## Post-compaction recovery
 
-Compaction can drop mid-feature context. The recovery hook `.claude/hooks/post-compact-restore.sh` runs on session start under the compact event, locates the active feature's checkpoint, verifies the current session is the team lead, and re-injects the recovery context. After recovery, Team Lead reads `work/{feature}/decisions.md` and `work/{feature}/logs/checkpoint.yml` to resume from the next pending wave.
+Compaction can drop mid-feature context. A supported runtime hook may surface the active
+feature's checkpoint, but it does not resume work or prove that prior workers still exist.
+The parent reads `work/{feature}/decisions.md` and
+`work/{feature}/logs/checkpoint.yml`, revalidates approvals and durable task evidence,
+reconciles open runtime work and actual available slots, then explicitly chooses the next
+pending wave.
 
-If the hook finds no active checkpoint, recovery is a no-op and the session starts fresh.
+If no active checkpoint exists, recovery is a no-op. If the runtime has no supported hook
+or continuation mechanism, resume waits until the parent or user next regains control; never
+claim that restoration or execution happened automatically.

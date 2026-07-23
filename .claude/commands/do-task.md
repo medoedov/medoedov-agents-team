@@ -7,50 +7,34 @@ description: |
 
 # Do Task
 
-Execute a spec-driven task with validation and status tracking.
+This is the full-task adapter for approved decomposed work. It retains
+privileged/high-risk and full lifecycle safeguards.
 
-## Step 1: Read Task
+Read `.claude/shared/pipeline-contract.md` and apply the `/do-task` row. Its preconditions,
+durable output/state, completion gate, and next allowed transitions are normative and fail
+closed.
 
-1. Read task file (user provides path or task number)
-   - If user didn't specify → ask: "Which task to execute?"
-2. Verify task status is `planned` (if not → ask user before proceeding)
-3. Update task frontmatter: `status: planned` → `status: in_progress`
-4. Read every file listed in the task's "Context Files" section
+Run exactly `python .claude/shared/scripts/validate_tasks_manifest.py --project . --manifest work/{feature}/tasks-manifest.yml --report work/{feature}/logs/tasks/manifest-guard-{iteration}.json`
+and require exit 0 before fresh execution
+or resume. Route a legacy atomicity/skill failure to the parent-owned in-scope
+remediation decomposition and revalidate without setting `awaiting_user`. Record the immutable
+guard report ref and SHA-256.
 
-## Step 2: Execute
+An ordinary technical repair that preserves the approved objective and
+acceptance stays inside the selected task. Re-run affected targeted checks with
+no amendment hash, no amendment manifest, and no reapproval. Product/authority
+changes return to the user.
 
-1. Load each skill listed in the task (frontmatter `skills: [...]` and "Required Skills" section)
-   - If a skill is not found → warn user, continue with remaining skills
-   - If task has no skill (frontmatter `skills: []` or absent) → read the task, execute "What to do" and "Verification Steps" directly. For tasks with user instructions → show the instruction to user, wait for confirmation.
-2. Follow loaded skill workflow
-3. Git commit implementation (code + tests pass): `feat|fix|refactor: task {N} — {brief description}`
-4. For each reviewer from the task's "Reviewers" section (if present):
-   1. Spawn subagent via Task tool (subagent_type = reviewer name, e.g. `code-reviewer`)
-   2. Pass: git diff of changes, path to task file, path to tech-spec, path to user-spec
-   3. Reviewer loads its own skill automatically (via agent frontmatter `skills:`)
-   4. Report is written to the path specified in the task's "Reviewers" section
-   5. Read report. If findings exist → fix, re-run tests, git commit: `fix: address review round {N} for task {N}`, repeat (max 3 rounds)
+For a privileged/high-risk post-approval edit to the selected task or plan artifact, apply
+`.claude/shared/pipeline-contract.md#post-approval-amendment-classification`.
+The adapter passes the structured amendment reference to `task-execution`; it
+does not independently classify, approve, or create a conversational gate.
+The parent invokes
+`.claude/shared/scripts/validate_technical_amendment.py`; only parent-owned
+validator evidence reference/hash after its atomic checkpoint transition may
+authorize mutation, clearing, `resume_ready`, or the exact approval-owned
+continuation.
 
-## Step 3: Verify
-
-1. Check each acceptance criterion from task file
-2. If task has "Verification Steps → Smoke" → execute each smoke command, record results in decisions.md Verification section
-3. If task has "Verification Steps → User" → ask user to verify, wait for confirmation
-4. If any verification fails → fix → re-run tests → re-run reviewers (new round) → re-verify
-   - After 3 failed rounds → stop, report failures to user, keep status `in_progress`
-   - Tool unavailable → document, suggest manual check
-
-## Step 4: Complete
-
-1. Read template `.claude/shared/work-templates/decisions.md.template` and write a concise execution report to `work/{feature}/decisions.md`. Follow template format strictly — no extra sections.
-2. Update task frontmatter: `status: in_progress` → `status: done`
-3. Update tech-spec: `- [ ] Task N` → `- [x] Task N`
-4. Git commit: `chore: complete task {N} — update status and decisions`
-
-## Self-Verification
-
-- [ ] Task status is `done`
-- [ ] Tech-spec checkbox updated
-- [ ] decisions.md entry written with reviews and verification results
-- [ ] Git commit created with task reference
-- [ ] Every acceptance criterion from task file is met
+Delegate the complete workflow to the `task-execution` skill. This command is only an
+adapter: it MUST NOT duplicate execution steps, update lifecycle artifacts directly, or
+infer completion from chat or file existence.

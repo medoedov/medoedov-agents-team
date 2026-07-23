@@ -21,10 +21,12 @@ Create technical specification through code research, adaptive clarification, an
 
 ## Phase 1: Load Context
 
-1. Ask user for feature name if not provided. Check `work/{feature}/` exists, create if needed.
+1. Ask user for the feature name if not provided, then resolve the existing `work/{feature}/` path without modifying the repository. Do not create the feature folder during this input check.
 
-2. Read `work/{feature}/user-spec.md`. If missing — ask user to describe the task or create user-spec first.
+2. Read `work/{feature}/user-spec.md`. If missing — ask the user to create and approve the user-spec first.
    Extract `size: S|M|L` from user-spec frontmatter — it determines testing strategy depth in tech-spec.
+
+   Before any mutation, require durable proof of `user-spec.status: approved` in the frontmatter. If the feature folder or user-spec is missing, malformed, stale, or has any status other than `approved` (including `draft`), fail closed: stop, report the unmet gate, and do not create the feature folder or tech-spec. Never infer approval from chat history or file existence. Preserve an existing approved tech-spec unless the user explicitly requests a revision.
 
 3. Read all files in `.claude/skills/project-knowledge/references/` (project.md, architecture.md, patterns.md, deployment.md, ux-guidelines.md, and any custom domain files). Missing files are fine — not all projects have all guides.
 
@@ -35,13 +37,31 @@ Create technical specification through code research, adaptive clarification, an
 - [ ] user-spec.md read, size extracted
 - [ ] Project Knowledge read
 
+### Lean spec path
+
+For Standard S and low-risk M, reuse prior chat, user-spec facts, and existing
+code research. Consume only the remaining questions in the one parent-owned
+clarification budget shared with interview: no more than five questions total
+across both stages, and zero when the batch was already used. Then write a compact tech-spec limited to
+decisions, affected files, acceptance mapping, risks, and targeted verification.
+
+In round 1 schedule `reality-checker` and `techspec-validator` only.
+`security-auditor` runs only for a security trigger; `test-reviewer` runs only
+when the testing strategy is materially uncertain or risk-triggered. UX and
+product specialists remain conditional on their matching value trigger. Allow
+at most one corrective re-run of affected validators. After user approval,
+return control for implementation through `/write-code`; do not continue into
+the full approval/decomposition tail or `/split-tasks` unless explicit
+decomposition is needed for disjoint ownership. The detailed phases and
+four-validator/full task plan below are full-path only.
+
 ## Phase 2: Code Research
 
-Launch `code-researcher` subagent (Task tool, opus) with feature path and user-spec path. The agent reads existing `code-research.md` (from user-spec phase if available) and deepens analysis for implementation.
+The parent schedules one bounded `code-researcher` worker through the current runtime with the feature path and user-spec path. The worker reads existing `code-research.md` (from the user-spec phase if available) and deepens analysis for implementation. Do not request or claim a model override unless the runtime returns enforceable binding evidence.
 
 After subagent completes — read `{feature_path}/code-research.md`. Use in Phase 3 clarification and Phase 4 spec writing.
 
-If during later phases a gap is discovered — launch `code-researcher` again with the specific question.
+If a later phase exposes a gap, the parent schedules another bounded `code-researcher` turn with that specific question and the same capacity and binding rules.
 
 **Checkpoint:**
 - [ ] code-research.md created/updated with implementation-level analysis
@@ -53,8 +73,9 @@ Analyze if additional information is needed based on user-spec and code research
 
 - Ask technical questions if gaps exist. No limit on question count — ask as many as needed.
 - Focus: technical constraints, integration points, data sources, external dependencies.
-- If gaps found in user-spec requirements — discuss with user and update user-spec too (via subagent or directly).
-- If requirements are fundamentally unclear — suggest creating user-spec first.
+- A technical clarification that does not alter approved requirements may be captured in the tech-spec.
+- If a gap or proposed change alters requirements, stop tech-plan. Tech-plan must not directly mutate an approved user-spec. Route an explicit `/interview` revision, return the user-spec to `status: draft`, revise it there, validate and reapprove it, then restart tech-plan from Phase 1.
+- If requirements are fundamentally unclear, stop and route the same `/interview` revision flow.
 
 **Checkpoint:**
 - [ ] All technical gaps clarified (or none existed)
@@ -78,6 +99,11 @@ Analyze if additional information is needed based on user-spec and code research
 
 4. Fill Implementation Tasks by waves. For each task provide: Description, Skill, Reviewers, Verify-smoke (optional), Verify-user (optional), Files to modify, Files to read. Select skill and reviewers from [skills-and-reviewers.md](references/skills-and-reviewers.md) (execution skills catalog, reviewer agents, default mappings).
 
+   Every `code-writing` task must declare `code-reviewer`.
+   Add `code-simplifier` only for a broad refactor; it may also be triggered
+   later when code-reviewer flags complexity/readability. Other reviewers are
+   risk-triggered.
+
    For each task, write `Verify-smoke:` when the task involves:
    - External API integration → **required**: runnable command that calls the real API and verifies the actual integration works (e.g. `python -c "import asyncio; from bot_app.x import f; asyncio.run(f(...))"` with expected output). Not just "check API key works" — test the actual function.
    - Library/model initialization → `python -c` or import check that verifies setup
@@ -93,23 +119,30 @@ Analyze if additional information is needed based on user-spec and code research
    - Task Description answers WHAT and WHY, not HOW. No step-by-step instructions, no line numbers, no implementation details.
    - All technical decisions belong in the Decisions section, not in task descriptions. If you're writing a decision rationale inside a task — move it to Decisions.
 
-5. The last two waves are always **Audit Wave** and **Final Wave**, in that order:
+   **Pre-approval atomicity gate:**
+   - One Implementation Task covers one architectural concern and one independently testable outcome. Split mixed application code, service integration, tests, infrastructure, deployment, and documentation into dependency-linked tasks that preserve the approved objective.
+   - More than five paths triggers review only. File count/category mix never blocks; cohesive non-mechanical vertical slices and production files plus directly owned tests are valid. Block only multiple architectural concerns or independently separable outcomes.
+   - Substantial Python, service, or test implementation uses `code-writing`. `infrastructure-setup` covers scaffold/configuration work and cannot stand in for `code-writing` when application behavior is implemented.
+   - Any Critical/Major atomicity or skill-task mismatch finding is blocking. Resolve it by splitting or correcting the task before user approval; task count and parent aggregation do not waive this gate.
 
-   **Audit Wave** (always present) — 3 tasks running in parallel, `reviewers: none`:
-   - **Code Audit** (skill: `code-reviewing`) — holistic code quality review of all feature code
-   - **Security Audit** (skill: `security-auditor`) — OWASP Top 10 across all components
-   - **Test Audit** (skill: `test-master`) — test quality and coverage across all components
-   - **Bug Hunt** (agent: `bug-hunter`, `skills: []`) — adversarial review: cross-reference API patterns, data flow failures, error UX. Add for size M/L or when feature has external API integrations (LLM providers, messaging platform, database, cache). Note: `bug-hunter` is an agent, not a skill — set `skills: []` in the task and feature-execution spawns it directly.
+5. End the plan with **Final Wave**, optionally preceded by one **Feature Audit Wave**.
 
-   Auditors read all source files from the feature and write reports (analysis only). If issues found — feature-execution lead spawns a fixer agent, auditors become reviewers for the fix.
+   Feature Audit selection is conditional and risk-based. Select the exact audit tasks from
+   the [Risk-Based Feature Audit Policy](references/skills-and-reviewers.md#risk-based-feature-audit-policy),
+   and give each selected task `reviewers: none` because the auditor is the review. This is
+   the only feature-level audit pass. If multiple audits are selected, feature-execution
+   schedules them in bounded batches. The project uses a configured cap of five and computes
+   `confirmed free children = min(configured cap - current active agents (including root),
+   live runtime reported free child slots, explicitly named workload-specific cap)`. The
+   batch must fit confirmed free child slots and live runtime availability.
 
    **Final Wave:**
    - **QA** (skill: `pre-deploy-qa`) — always present. Acceptance testing: run all tests, verify acceptance criteria from user-spec and tech-spec.
    - **Deploy** (skill: `deploy-pipeline`) — only if deploy is needed for this feature.
    - **Post-deploy verification** (skill: `post-deploy-qa`) — only if live-environment checks are needed (MCP tools listed in Agent Verification Plan → Tools required).
-   QA is mandatory. Deploy and post-deploy — if applicable.
+   Final QA is mandatory. Deploy and post-deploy — if applicable.
 
-6. Task Count Check: if >15 tasks — propose splitting into MVP + Extension phases. Wait for user decision.
+6. Task Organization Check: atomicity determines task count. Fifteen tasks is a soft organization threshold and a maximum scheduling/validation batch size, not a feature lifecycle cap. When a plan is larger, keep the approved feature objective intact, organize dependency-linked batches, and preserve atomic tasks.
 
 7. Git commit: `draft(techspec): create tech-spec for {feature}`
 
@@ -118,16 +151,30 @@ Analyze if additional information is needed based on user-spec and code research
 - [ ] Implementation Tasks include Description (2-3 sentences), skill, reviewers for each task
 - [ ] No AC or TDD anchors in tasks (those come from task-decomposition phase)
 - [ ] Technical decisions are in Decisions section, not in task descriptions
+- [ ] Every `code-writing` task has `code-reviewer`; broad refactors also have `code-simplifier`
+- [ ] Feature Audit Wave is omitted or contains only tasks selected by the documented risk triggers
 - [ ] Final Wave present with QA (mandatory) + Deploy/Post-deploy (if applicable)
-- [ ] Task count ≤15 (or user approved larger scope)
+- [ ] More than five paths was reviewed only as a heuristic; cohesive non-mechanical vertical slices and production plus directly owned tests remain valid, and only multiple architectural concerns or independently separable outcomes block
+- [ ] Plans over 15 tasks use bounded organization/validation batches without merging atomic tasks
 
 ## Phase 5: Validation
 
-### Run 4 validators in parallel
+### Full-path validators in bounded batches
 
-Launch all as subagents. Each validator appends its findings section to the aggregate state log
-`work/{feature}/logs/tech-plan.yml` (single file, sections per validator — consistent with
-`{task-id}.run.yml` from task-execution and `interview.yml` from interview-planning).
+All four validators remain required in round 1 for the full path. Calculate actual available slots before
+scheduling; the root counts as an active agent. The workload-specific cap is four validators. Compute
+`confirmed free children = min(configured cap - current active agents (including root),
+live runtime reported free child slots, explicitly named workload-specific cap)` with this
+project's configured cap of five. All four validators may run concurrently only when four
+free child slots are actually confirmed and the live inventory confirms four free child slots;
+otherwise use smaller batches that fit the confirmed free child slots and live runtime
+availability. Each validator writes only its own
+disjoint report at
+`work/{feature}/logs/tech-plan/validator-reports/{validator}-round{N}.json`.
+Validators must not append to a shared file, concurrently append to aggregate state, edit the
+tech-spec, or write another validator's report. The parent aggregates after all required reports arrive
+and is the sole writer of the combined findings in
+`work/{feature}/logs/tech-plan.yml`.
 
 | Validator | Agent | Checks |
 |-----------|-------|--------|
@@ -140,27 +187,33 @@ Pass to each validator: `work/{feature}/tech-spec.md` + `work/{feature}/user-spe
 
 ### Process findings
 
-Read all 4 reports. For each finding:
+The parent reads all reports required for the current round and aggregates them. For each finding:
 - Fix if clearly valid
 - Reject with reasoning if disagree
 - Discuss with user if controversial
 
-### Iterate if needed (up to 3 iterations)
+Critical/Major atomicity and skill-task mismatch findings are not dismissible planning opinions.
+They remain blocking until the affected task is split or corrected and the validator reports a
+clean result with `resolved_by_split` evidence where a split occurred.
+
+### Iterate if needed (at most 3 total validation rounds)
 
 If fixes were made:
 1. Apply targeted fixes directly in `work/{feature}/tech-spec.md`.
 2. Git commit: `chore(techspec): validation round {N} — {summary of fixes}`
-3. Re-run validators on updated tech-spec.
-4. Repeat up to 3 iterations.
+3. Map each change to the validators whose checks can be affected. Re-run only those affected validators when the impact is safely isolated; otherwise re-run all four in bounded batches under the same available-slot rule.
+4. Write every re-run to a new `{validator}-round{N}.json` report, then have the parent replace its aggregate from the completed disjoint reports. Never append concurrently.
+5. Stop after round 3; validation work is bounded and must not start a fourth round.
 
 If problems remain after 3 iterations — show user: "Validation didn't pass in 3 iterations. Here's what remains — let's resolve together."
 
 **Checkpoint:**
-- [ ] All 4 validators ran
+- [ ] All 4 validators ran in round 1; later rounds re-ran only affected validators where safe
 - [ ] Findings processed (fixed / rejected / discussed)
+- [ ] Validator reports are disjoint and parent aggregation is complete
 - [ ] Final tech-spec.md placed in work/{feature}/
 
-## Phase 6: User Approval
+## Phase 6: User Approval (full path only)
 
 1. Show user the full tech-spec.md.
 2. Show validation summary: iterations count, issues found and resolved.
@@ -170,11 +223,14 @@ If problems remain after 3 iterations — show user: "Validation didn't pass in 
 6. Git commit: `chore(techspec): approve tech-spec for {feature}`
 7. Tell user next step: run `/split-tasks` to create task files.
 
+User approval records acceptance of a validator-clean plan; it does not override an unresolved
+atomicity or skill-task mismatch gate.
+
 **Checkpoint:**
 - [ ] User explicitly approved tech-spec
 - [ ] status = approved
 
-## Final Check
+## Final Check (full path only)
 
 - [ ] tech-spec.md created with all sections (Implementation Tasks are brief scope descriptions)
 - [ ] Validation passed (4 validators)

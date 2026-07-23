@@ -1,308 +1,147 @@
 ---
-description: |
-  Single sweep cycle for the watchdog agent. Invoked via /loop 10m. Reads
-  filesystem state, classifies stalls (S1-S4), pings or escalates, writes to
-  watchdog.log.
+description: Run one capability-aware, event-driven watchdog observation cycle.
 ---
 
-# Sweep-watchdog — single sweep cycle
+# Sweep Watchdog
 
-This command implements one full sweep cycle of the watchdog agent
-(`.claude/agents/watchdog.md`). The watchdog invokes it via `/loop 10m
-/sweep-watchdog` immediately after TeamCreate and continues until the
-`/do-all-tasks` run ends. Each invocation is independent: it reads state, acts,
-logs, and returns.
+Read `.claude/shared/pipeline-contract.md` first. This command is a single
+observation transition with durable output; it never advances task or feature
+completion state and never satisfies a completion gate by itself.
 
-The agent spec is the authoritative reference for stall classifier rules
-(S1–S4), the 3-ping escalation thresholds, Surface 1/2/3 message templates,
-the M4 rate-limit path, and the exact permitted Bash patterns. This command
-implements one iteration of that algorithm; it does not redefine it. Where a
-rule could drift between the two files, the agent spec wins — point to it
-rather than duplicate.
+## Lifecycle and ownership
 
-The sweep does not spawn agents, modify code, or write to `decisions.md`. It
-reads filesystem state, sends pings or escalations, optionally writes
-`stall_state` to `checkpoint.yml` on a rate-limit detection, and appends one
-JSON line to `work/{feature}/logs/watchdog.log`.
+The parent orchestrator invokes one sweep at a natural wait/yield boundary:
+after an agent result, message, `wait_agent` return, deadline event, user reply,
+or session recovery. Supervision is **event-driven**. The parent may request
+another sweep later, but the watchdog is not a resident scheduler.
 
-## Inputs read
+**Parent owns resume.** Only the parent may re-prompt, call `followup_task`,
+spawn a replacement, interrupt an agent, clear a stall, or advance a wave. A
+watchdog observation returns evidence and a recommended parent action; it does
+not perform that action.
 
-- `work/{feature}/logs/checkpoint.yml` — `team_name`, `tasks:` block (active
-  teammates derived from `in_progress` rows), `stall_state.active` (skip-if-true
-  guard), `last_completed_wave`.
-- For each active teammate: TaskList unread-message count and `next:` marker.
-- For each active teammate: that teammate's last raw output / log text — used
-  by S4 detection when feeding the M4 classifier.
+Codex **must not require `/loop`**, unread counts, access to another agent's raw
+output, a background scheduler, or a shared Team inbox. It also must not assume
+Claude Agent Teams, `TeamCreate`, `TaskList`, `ScheduleWakeup`, an alert channel,
+or a team configuration file exists.
 
-## Sweep steps (in order)
+## Capability gate
 
-### Step 1 — Read state
+At the beginning of the sweep, record which runtime capabilities are actually
+available. **If the runtime exposes** an optional signal, the parent may pass a
+bounded snapshot of that signal to the watchdog. If it does not, mark the field
+`unavailable`; never fabricate `false`, `0`, an empty inbox, or a timestamp.
 
-If `awaiting_user.active == true` in `checkpoint.yml`, the run is parked behind
-a user decision (plan approval, reviewer-conflict choice, escalation reply,
-deploy go-ahead). The teammates are correctly waiting, not stalled — pinging
-them is noise. Short-circuit: write one log entry with `active_teammates: []`,
-`stall_types: ["awaiting-user"]`, `pings_sent: 0`, `redacted: true`, and return.
-This is the awaiting-user guard from the agent spec ("Awaiting-user
-suppression"). Team-lead clears the flag when the user replies.
+Supported evidence is limited to:
 
-If `stall_state.active == true` in `checkpoint.yml`, the run is paused on a
-rate-limit. This is the **resume-on-sweep** decision (agent spec "M4 resume
-path"):
-- If `now < reset_at` — still inside the limit window. Short-circuit: write one
-  log entry with `active_teammates: []`, `stall_types: ["rate-limit-wait"]`,
-  `pings_sent: 0`, `redacted: true`, and return. (Also the M4 idempotency guard
-  — no second M4 write while paused.)
-- If `now >= reset_at` — the window cleared. Resume: set `stall_state.active:
-  false`, send **Surface 3** (auto-resume wake) to the user, signal team-lead to
-  continue from `last_active_wave`, and write a log entry with
-  `stall_types: ["rate-limit-resume"]`. Then return. `reset_at` already includes
-  the buffer, so compare against it directly.
+- durable `work/{feature}/logs/checkpoint.yml` state;
+- canonical current-run pointers, their validated immutable task runs, and expected
+  reviewer-report paths;
+- filesystem timestamps obtained through the permitted patterns below;
+- explicit status/events supplied by the parent from runtime-native tools; and
+- an explicit rate-limit error supplied by the parent or already recorded in a
+  durable artifact.
 
-Otherwise enumerate active teammates from the checkpoint `tasks:` block — any
-row with `status: in_progress`. Skip the teammate literally named `watchdog`
-(self-skip per agent spec edge cases). Also skip any teammate whose latest
-marker is `next: awaiting-user` (or `blocked: user`): it is individually parked
-on the user, so run no oracle, no classification, and no `consecutive_stale`
-increment for it — record it under `awaiting_user_teammates` in the log entry
-and move on. Per agent spec "Awaiting-user suppression".
+No observation may infer an unread count, message history, raw agent output, or
+agent identity from filesystem inactivity.
 
-If `checkpoint.yml` is missing or unreadable, append one log entry with a
-warning marker (`stall_types: ["checkpoint-missing"]`, `redacted: true`) and
-return. Do not crash the sweep loop.
+## Observation process
 
-For each active teammate compute `last_activity` as the union (max) of the
-four filesystem signals:
+1. Read the feature checkpoint. If it is absent, malformed, or ambiguous,
+   return `classification: unknown` and recommend parent inspection.
+2. If `awaiting_user.active: true`, inspect only its structured
+   `amendment_ref` and apply
+   `.claude/shared/pipeline-contract.md#post-approval-amendment-classification`.
+   Never classify from the free-form question. If the record is not yet
+   validated by `.claude/shared/scripts/validate_technical_amendment.py`, recommend
+   parent revalidation; the watchdog does not clear it. Durable validator
+   evidence is required.
+   If the validated record proves a false technical gate, return
+   `classification: false-technical-approval-gate` and recommend the canonical
+   parent clear-and-continue action. For a product/authority result, return
+   `classification: awaiting-user`; do not ping or count the wait as stale.
+3. Resolve current-run pointers through containment, ID, digest, and supersedes-chain
+   validation, then compare checkpoint expectations with the selected immutable terminal
+   runs and expected review report paths. A missing report is evidence only when the
+   checkpoint names that report and its durable deadline has passed.
+4. Use runtime agent status only when the parent supplied it from an exposed
+   capability. `idle`, `completed`, and `not_found` are distinct; missing status
+   is `unavailable`, not `idle`.
+5. Classify a rate limit only from an explicit error/status payload. If raw
+   output access is unavailable, S4 detection is unavailable until the parent
+   receives or records such an error.
+6. Produce one observation with `classification`, `evidence`,
+   `unavailable_signals`, and `recommended_parent_action`.
 
-- Most-recent commit touching the feature directory:
-  `git log --format=%ct -1 -- work/{feature}/`
-- `decisions.md` mtime:
-  `python -c "import os,sys; print(int(os.path.getmtime(sys.argv[1])))" work/{feature}/decisions.md`
-- Newest per-task review report mtime:
-  `python -c "import os,sys; print(int(os.path.getmtime(sys.argv[1])))" work/{feature}/logs/working/{task}/<newest>.json`
-- Newest audit wave report mtime (covers audit-wave teammates that write
-  to `work/{feature}/logs/tasks/*.json` — e.g. security-auditor, bug-hunter,
-  test-reviewer — and would otherwise not trip the per-task glob):
-  `python -c "import os,sys; print(int(os.path.getmtime(sys.argv[1])))" work/{feature}/logs/tasks/<newest>.json`
+When invoked in the parent context, append exactly one redacted JSON line to
+`work/{feature}/logs/watchdog.log`. When invoked as a child agent, return the
+entry to the parent; the child must not race the parent to update shared state.
 
-A missing signal contributes 0 (epoch), never a crash.
+For a confirmed rate limit, propose the canonical `stall_state` fields from
+`.claude/shared/work-templates/checkpoint.yml.template`. The parent atomically
+writes the checkpoint. Reaching `reset_at` is only a `resume_due` observation:
+it is not autonomous resume. The next session start or natural wait/yield event
+lets the parent inspect durable state and decide how to continue.
 
-### Step 2 — Genuine-work oracle
+## Exactly four permitted command patterns
 
-If `now - last_activity < 300` seconds — a fixed 5-minute recent-work window,
-deliberately decoupled from the 10-minute sweep cadence — the teammate is
-making genuine progress. Reset that teammate's `consecutive_stale` counter to
-0 and skip classification for this teammate. (With a 10-minute sweep the 5–15
-min grace window between this oracle and the 15-min S3 threshold absorbs any
-gap, so no false ping is emitted for work done between sweeps.) This is the only line of
-defence against false positives on long edits, large reads, or multi-minute
-Bash. The union over four signals is deliberate — any one is sufficient
-proof of work (see agent spec, "Filesystem genuine-work oracle").
+Exactly four permitted command patterns exist for this command. No other shell
+command is authorized by the watchdog contract.
 
-### Step 3 — Stall classification
+1. Most recent commit timestamp for a path:
 
-If the oracle did not fire (all four signals are >5 min stale), classify
-the teammate into at most one of S1–S4 per the agent spec rules:
+   ```bash
+   git log --format=%ct -1 -- <path>
+   ```
 
-- **S1 — Multi-reviewer round desync.** `len(reviewers) >= 2` AND the
-  teammate's last `SendMessage` to any reviewer is >30 min old AND the
-  teammate is not in `next: idle` AND at least one expected reviewer report
-  for R(N) is missing. Action: log + escalate to team-lead with the marker
-  `reviewer {name} stuck on R(N)`. Do not run the 3-ping protocol — S1 goes
-  straight to team-lead.
-- **S2 — Idle with pending inbox.** Teammate emitted `next: idle` while
-  TaskList shows `has_unread == true`. Action: 3-ping protocol (Step 4).
-- **S3 — No filesystem progress.** All four activity signals >15 min stale
-  AND `has_unread == false`. Action: 3-ping protocol (Step 4).
-- **S4 — Subscription rate-limit.** Teammate's last output contains a
-  subscription rate-limit error. Detection: feed the error body through the M4
-  classifier Bash snippet below (Step 6); branch on `result == "rate_limit"`.
-  Action: M4 path (Step 5). Skip the 3-ping protocol — rate-limit is not a
-  ping-recoverable class.
+2. File modification time, with the path passed as an argument:
 
-Each teammate gets at most one class per sweep. If S4 matches, it wins over
-S2/S3 (rate-limit dominates other signals).
+   ```bash
+   python -c "import os,sys; print(int(os.path.getmtime(sys.argv[1])))" <path>
+   ```
 
-Increment `consecutive_stale` for the teammate on each classification hit
-that is not S4. Reset to 0 on any inbound message between sweeps or any
-oracle hit.
+3. Rate-limit classification, with untrusted text passed through `ERROR_MSG`
+   rather than interpolated into the program:
 
-### Step 4 — Action: 3-ping escalation (S2 / S3)
+   ```bash
+   ERROR_MSG="$raw_error" python -c "
+   import os
+   from <project_error_classifier_path> import classify_claude_error
+   class E(Exception):
+       def __init__(self, message): self.message = message
+   print(classify_claude_error(E(os.environ['ERROR_MSG'])))"
+   ```
 
-Per the agent spec "3-ping escalation protocol":
+4. Reset-time extraction, using the same injection-safe transport:
 
-- `consecutive_stale == 1`: `SendMessage(teammate, <Surface 1 ping text>)` —
-  the Surface 1 template from the agent spec. Log entry with `pings_sent: 1`.
-- `consecutive_stale == 2`: `SendMessage(teammate, <Surface 1 ping text>)`
-  again — same template, repeated. Log entry with `pings_sent: 2`.
-- `consecutive_stale >= 3`: stop pinging. Send the **Surface 2 escalation**
-  to the user via messaging platform alert + chat message — the Surface 2 template
-  from the agent spec, with `{N}`, `{teammate}`, `{X}`, `{Y}`, `{timestamps}`
-  filled from sweep state. Log entry with `escalations: 1`. The counter does
-  not auto-reset above 3; the watchdog waits for the user's decision.
+   ```bash
+   ERROR_MSG="$raw_error" python -c "
+   import os
+   from tests.agent_orchestration.helpers import extract_reset_at
+   print(extract_reset_at(os.environ['ERROR_MSG']).isoformat())"
+   ```
 
-Surface 1 and Surface 2 wording is owned by `.claude/agents/watchdog.md`
-("Surface message templates"). Do not redefine the strings here.
+Paths must be validated as feature-local before invoking patterns 1 or 2. Raw
+errors must be redacted before durable logging.
 
-### Step 5 — Action: M4 rate-limit path (S4)
+## Durable output
 
-Per the agent spec "M4 rate-limit path", executed exactly once per detection
-(the Step 1 `stall_state.active` guard makes it idempotent):
-
-1. Run Pattern 4 (reset-time extraction) on the error body immediately after
-   Pattern 3 confirms the bucket is `rate_limit`. Pattern 4 prints the absolute
-   `reset_at` as an ISO-8601 UTC string with the buffer already folded in (it
-   reads the real reset time — Anthropic reset header / epoch / ISO /
-   `Retry-After` — and only falls back to `now + 5h` when none is present). Use
-   that value verbatim.
-2. Write the 8-field `stall_state` block to
-   `work/{feature}/logs/checkpoint.yml`:
-   `active: true`, `reason: "rate_limit"` (canonical — exact string matched
-   by `SessionStart.sh`, NOT `rate_limit_exceeded`), `detected_at` (ISO-8601
-   UTC, current), `reset_at` (ISO-8601 UTC, from Pattern 4 — buffer included),
-   `buffer_seconds: 60` (diagnostic record of the pad already in `reset_at`;
-   not re-added), `pending_teammates` (active teammate names from this sweep),
-   `last_active_wave` (`checkpoint.last_completed_wave + 1`),
-   `resume_attempts: 0` (see agent spec known v1.0 limitation — counter is
-   never incremented in this iteration).
-3. Attempt `ScheduleWakeup(delaySeconds = clamp(reset_at - now, 60, 3600))` —
-   buffer already in `reset_at`, do not re-add. Best-effort early nudge only:
-   the runtime hard-clamps `ScheduleWakeup` to 1 hour, so it cannot span a
-   multi-hour limit. The real resume is the fixed `/loop 10m` re-checking
-   `reset_at` each sweep (Step 1, resume-on-sweep); `SessionStart.sh` is the
-   cross-session backstop if the session dies before reset.
-4. Send the **Surface 3 auto-resume wake** to the user via messaging platform alert +
-   chat message — the Surface 3 template from the agent spec, with
-   `{duration}`, `{start}`, `{end}`, `{N}`, `{M}`, `{task_name}` filled from
-   the checkpoint and computed timestamps.
-
-### Step 6 — Log write (every sweep, no exceptions)
-
-Append exactly one JSON-line entry to `work/{feature}/logs/watchdog.log`.
-Entry schema (one line per sweep, newline-delimited):
+Every completed invocation produces exactly one entry with this shape:
 
 ```json
 {
   "sweep_id": "uuid4",
-  "ts": "2026-05-24T02:15:00Z",
-  "active_teammates": ["t3-impl"],
-  "stale_count": 1,
-  "pings_sent": 1,
-  "escalations": 0,
-  "stall_types": ["S2"],
-  "awaiting_user_teammates": [],
+  "ts": "ISO-8601 UTC",
+  "feature": "feature-name",
+  "classification": "healthy|awaiting-user|false-technical-approval-gate|stale|rate-limit|resume-due|unknown",
+  "evidence": [],
+  "unavailable_signals": [],
+  "recommended_parent_action": "none|inspect|re_prompt|interrupt|resume|revalidate-and-continue",
   "redacted": true
 }
 ```
 
-`awaiting_user_teammates` holds teammates skipped this sweep for a
-`next: awaiting-user` marker (Step 1). When the global `awaiting_user.active`
-guard fires, the whole entry is the short-circuit form from Step 1:
-`active_teammates: []`, `stall_types: ["awaiting-user"]`, `pings_sent: 0`.
-
-Before assembling the entry, every string field passes through
-`_redact_sensitive()` from the project error classifier module (see
-project-knowledge patterns.md for the module path).
-This strips LLM provider API key patterns (e.g. `sk-ant-...`, `sk-...`),
-Google `AIza...`, and HTTP `Bearer ...` / `Basic ...` patterns, replacing
-each match with `[REDACTED]`. The redaction is reused — never re-implemented
-inline — because the production classifier is the audited truth source and
-any drift between watchdog and bot-runtime redaction would be a security gap.
-
-The `"redacted": true` sentinel is required on every log entry, set
-unconditionally after the redaction pass. Its absence in any written log line
-indicates a log-path bypass that did not run through `_redact_sensitive()`.
-Tests in `tests/agent_orchestration/test_redaction.py` (Task 7) assert both:
-(a) absence of bearer tokens / API keys in log content, and (b) presence of
-`"redacted": true` on every parsed line. The sentinel-presence check is the
-canary — it fails loudly if a future refactor adds a code path that writes
-to `watchdog.log` without going through the redaction wrapper.
-
-A sweep with no active teammates still writes one log entry: `stale_count: 0`,
-`active_teammates: []`, `stall_types: []`, `redacted: true`.
-
-## Permitted Bash patterns
-
-Exactly three Bash invocations are permitted from this command. No other
-Bash commands are allowed; any deviation is a finding for the reviewer.
-These mirror the agent spec "Permitted Bash patterns" section verbatim — the
-two files share one enumeration so drift is impossible.
-
-**1. Git mtime for a path** (epoch seconds of the most recent commit
-touching the path):
-
-```bash
-git log --format=%ct -1 -- <path>
-```
-
-The `--` separator is mandatory. It separates revision arguments from path
-arguments and prevents `<path>` being misread as a ref when the path string
-happens to match an existing branch or tag name.
-
-**2. File mtime in epoch seconds** (for files not in git or for uncommitted
-review reports):
-
-```bash
-python -c "import os,sys; print(int(os.path.getmtime(sys.argv[1])))" <path>
-```
-
-The path is passed as `sys.argv[1]`, never interpolated into the script
-string.
-
-**3. M4 rate-limit classifier invocation:**
-
-```bash
-ERROR_MSG="$raw_error" python -c "
-    import os, sys
-    sys.path.insert(0, '.')
-    from <project_module>.error_classifier import classify_claude_error, _redact_sensitive
-    class _E(Exception):
-        def __init__(self, m): self.message = m
-    result = classify_claude_error(_E(os.environ['ERROR_MSG']))
-    print(result)"
-```
-
-The error string is passed via the `ERROR_MSG` environment variable. It is
-**never** interpolated into the `python -c` command string. An error body
-may contain arbitrary characters — shell metacharacters, quotes, backticks,
-`$(...)` patterns — that would execute or break shell parsing if
-interpolated. Env-var passing is injection-safe; string interpolation is
-not. This is the only injection-safe path for moving an attacker-controllable
-string from Bash into Python.
-
-**4. Pattern 4 — reset-time extraction.** Prints the absolute `reset_at` as an
-ISO-8601 UTC string (buffer already folded in). Delegates to
-`extract_reset_at()` — the single source of truth in
-`tests/agent_orchestration/helpers.py`, reused so runtime and tests cannot
-drift. It parses the reset moment in priority order — Anthropic
-`anthropic-ratelimit-*-reset` headers (RFC3339 or epoch) → bare unix epoch near
-a reset keyword → ISO timestamp near a reset keyword → `Retry-After: <seconds>`
-(relative) → `now + 5h` fallback — rejecting any absolute candidate outside
-`(now, now+14d]`. The M4 path uses this immediately after Pattern 3 returns
-`rate_limit`. `ERROR_MSG` env-var passing keeps the injection-safety property.
-
-```bash
-ERROR_MSG="$raw_error" python -c "
-import sys, os
-sys.path.insert(0, '.')
-from tests.agent_orchestration.helpers import extract_reset_at
-error_msg = os.environ.get('ERROR_MSG', '')
-reset_at = extract_reset_at(error_msg)
-print(reset_at.isoformat())"
-```
-
-## Edge cases
-
-- **No active teammates** (all idle/done): write one log entry with
-  `active_teammates: []`, `stale_count: 0`, `stall_types: []`, `redacted:
-  true`. Skip all ping/escalation logic.
-- **`checkpoint.yml` not found:** log one warning entry
-  (`stall_types: ["checkpoint-missing"]`, `redacted: true`) and return. Do
-  not crash the sweep loop.
-- **Self-skip:** the teammate literally named `watchdog` must not appear in
-  `active_teammates` and never triggers a ping — even if it appears in
-  TaskList alongside other teammates.
-- **Windows mtime resolution:** NTFS stores timestamps at 100 ns granularity, but filesystem/OS layers may round — treat sub-second equality conservatively; the 10-minute sweep window is unaffected.
-- **Already-paused run:** if `stall_state.active == true` from a prior M4
-  detection, Step 1 short-circuits with an empty log entry. Resume is owned
-  by `SessionStart.sh` / `ScheduleWakeup`, not by the sweep itself.
+All string fields pass through the project's canonical redaction helper before
+the entry is persisted. A missing capability is reported explicitly. The
+watchdog must not claim a ping, escalation, scheduled callback, or autonomous
+resume that the runtime did not actually perform.

@@ -160,7 +160,11 @@ Fix any issues before proceeding.
 
 ### 4.2 Documentation Review
 
-Run `documentation-reviewer` agent (Task tool, sonnet) on the project. Fix critical and major findings. Minor findings — fix or leave at your discretion.
+The parent schedules one bounded `documentation-reviewer` worker through the current runtime
+with named specialist role instructions and the project documentation as its artifact scope.
+Do not request or claim a model override unless the runtime returns enforceable binding
+evidence. The worker returns findings to the parent; fix critical and major findings. Minor
+findings — fix or leave at your discretion.
 
 ### 4.3 Show Files
 

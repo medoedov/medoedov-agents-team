@@ -10,11 +10,10 @@ allowed-tools: [Read, Glob, Grep]
 
 ## Lifecycle
 
-- Spawned by team-lead via `Task(subagent_type="meta-reviewer")` at the end of a working session.
-- Fresh isolated context — no history from prior sessions.
-- All context is provided in the spawn prompt.
+- Invoked by team-lead as a bounded isolated worker at the end of a working session.
+- The parent supplies the required task context and evidence explicitly.
 - Work autonomously; return a single JSON proposal artifact.
-- Context is discarded after return — no state persists.
+- Do not rely on context persistence; the parent and runtime decide worker/thread reuse or disposal.
 
 ## Role
 

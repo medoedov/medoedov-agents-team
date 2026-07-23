@@ -76,9 +76,12 @@ description: |
    - Run project's linter and formatter before reviews
 
 2. **Run Relevant Tests**
-   - Tests for files changed
-   - Tests mentioned in task (if applicable)
-   - Save full test suite for end of feature
+   - Use targeted tests during implementation and repair: tests for files
+     changed and tests named by the task.
+   - Run the full suite once at final QA, not after every repair or review.
+   - **Lean budget stop-loss:** if auxiliary orchestration helpers or their
+     focused suite exceed the documented lean budget, stop and request
+     simplification or design review, not another automatic test or review cycle.
 
 3. **Smoke Verification** (if task has Verification Steps → Smoke or User)
 
@@ -89,21 +92,27 @@ description: |
    Smoke catches integration bugs that mocked tests miss:
    real API responses, library initialization, config validity.
 
-4. **Run Reviews** (launch in parallel)
+4. **Coordinate Reviews Through the Parent**
 
    **Reviewer selection:**
-   - Working on a task file → run reviewers from the task's "Reviewers" section
-   - Standalone (no task file) → default: code-reviewer, security-auditor, test-reviewer
+   - `code-reviewer` is required for every code change.
+   - `code-simplifier` runs only when code-reviewer flags complexity or readability,
+     or when the change is a broad refactor.
+   - Every risk-triggered reviewer declared by the approved plan remains
+     required; deduplicate exact repeats.
 
-   For each reviewer:
-   1. Spawn subagent via Task tool (subagent_type = reviewer name, e.g. `code-reviewer`)
-   2. Pass: git diff of changes, path to task file, path to tech-spec, path to user-spec
-   3. Reviewer loads its own skill automatically (via agent frontmatter `skills:`)
-   4. Report path: from the task's "Reviewers" section (or `logs/working/` if standalone)
+   Additional reviewers are added only through Team Lead risk triggers.
+   Security, test, bug, deploy, prompt, and other specialist reviews are
+   conditional; they do not replace code-reviewer.
 
-   Reviewers write JSON reports to `logs/working/task-{N}/{reviewer-name}-{round}.json`.
-   `{N}` = task number from task file; `"standalone"` if no task file.
-   On re-review: new file with incremented round number, old file stays.
+   The code-writing worker must not spawn reviewers or create nested fan-out. It returns the changed-file inventory, git diff, task/spec paths, tests, and smoke evidence to the parent orchestrator.
+
+   The parent schedules each required reviewer as a bounded isolated worker using the current runtime primitive and explicit reviewer-role instructions. Pass only the minimal context needed: immutable diff, changed-file inventory, relevant task/spec paths, and evidence. Reviewers may run in parallel only when their work and report paths are independent, and the parent must keep itself plus every active worker within available slots. Do not rely on shared team state or claim a model override unless the current runtime explicitly supports it.
+
+   Full-path task reviewers write result artifacts to
+   `logs/working/task-{N}/{reviewer}-round{R}.json`. Direct and lean ordinary
+   reviewers return one bounded report without requiring a filesystem receipt
+   or immutable run chain.
 
 5. **Process Findings**
 
@@ -113,16 +122,32 @@ description: |
 
    For each finding:
    - **Valid, improves code** → apply (any severity: critical, major, minor, low)
-   - **Disagree or uncertain** → discuss with user (explain reasoning)
+   - **Disagree or uncertain** → return to the parent for structured technical disposition;
+     involve the user only for formal reviewer conflict or another owner-owned trigger
    - **Out of scope** → skip, note in findings log
 
    Produce a findings log:
    | # | Source | Severity | Finding | Action | Reason |
    Each finding appears in this table — transparent decision trail.
 
-   After applying fixes → re-run tests → re-run the reviewer(s) that reported them.
-   Limit: 3 review iterations. If findings remain after round 3 → ask user.
-   Reason: fixes can introduce new issues — a second pass catches regressions.
+   After applying fixes, re-run only affected targeted tests. The lean default
+   is one review round. Run a second round only for unresolved critical or
+   major findings. On the full path, the initial round may use every declared
+   risk reviewer; later repair rounds rerun only reviewers whose Critical/Major
+   findings can be affected. Deduplicate findings by stable semantic identity.
+   Review counting is exact: R1 runs all required reviewers; R2 runs only affected
+   Critical/Major reviewers; R3 is reserved for the final integrated all-required-reviewers
+   gate (or R1 is final when clean). There is no R4; any finding after R3 routes to remediation.
+
+   The unchanged full-path attempt remains capped at three rounds, with no
+   round 4. Return remaining findings to the parent for newly scoped
+   remediation tasks and manifest-guard revalidation. At most one generation exists per
+   `root_blocker_id`; descendants inherit generation 1/bounded path and cannot decompose again.
+   Same-root replacement failure after R3 is `technical-repair-exhausted`. User input is reserved
+   for a product or acceptance change, authority change, external or
+   destructive effect, unavailable required input or service, reviewer
+   conflict, or the same atomic root blocker after its bounded remediation
+   path is exhausted.
 
 **Checkpoint:** List post-work steps completed.
 
@@ -133,7 +158,7 @@ Verify each item before marking complete. If any item fails, return to the relev
 - [ ] All phases completed (Preparation, Implementation, Post-work)
 - [ ] Tests pass
 - [ ] Smoke verification executed (if task had Smoke/User checks)
+- [ ] Parent coordinated all required reviewers within available slots; no nested fan-out occurred
 - [ ] Each reviewer finding evaluated and logged
 - [ ] Findings log table produced
-- [ ] Review JSON reports saved to `logs/working/task-{N}/`
-
+- [ ] Full-path immutable review artifacts saved and aggregated when applicable

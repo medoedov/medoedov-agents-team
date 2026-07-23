@@ -38,11 +38,13 @@ Create task file for the specified task from tech-spec.
 - skills: Array of skills for the task (default: [code-writing])
 - reviewers: Array of reviewers (default: [code-reviewer, test-reviewer])
 - verify: Array of verification types: [smoke], [user], [smoke, user], or [] (default: []). Derives from tech-spec Verify-smoke: and Verify-user: presence
-- teammate_name: Cosmetic name for agent teams (default: none)
+- teammate_name: Optional human-readable worker label for logs/reports only (default: none); never use it for routing or as evidence of a bound runtime role/model
 
 **Fix mode (optional):**
 - mode: `fix` (default: `create`)
 - findings: Array of validator findings — JSON objects with `severity`, `issue`, `fix`
+- source_task_id: High-level tech-spec task ID when one approved item is partitioned
+- source_acceptance: Acceptance items that every partition must preserve collectively
 
 ## Process
 
@@ -54,7 +56,9 @@ Create task file for the specified task from tech-spec.
 4. Apply fixes to the task while preserving everything that was correct
 5. Overwrite task file. Return file path.
 
-Do NOT touch `task-files-map.yml` in fix mode — only `mode=create` writes it.
+In fix mode, write only this creator's assigned task file. **MUST NOT write**
+shared `task-files-map.yml` or `tasks-manifest.yml`; return an updated structured
+entry to the parent instead.
 
 ### If mode=create (default)
 
@@ -76,6 +80,12 @@ Do NOT touch `task-files-map.yml` in fix mode — only `mode=create` writes it.
 3. Read actual code files from files_to_modify and files_to_read.
    For each file: understand current state — what exists, what functions/classes are there, what needs to change or be added. Use this to write concrete "What to do" and "Details".
 
+   Before writing, verify the proposed task has one architectural concern. If the approved
+   high-level item mixes concerns, return a partition proposal with disjoint scopes,
+   dependencies, skill assignments, and acceptance carry-forward instead of writing one mixed
+   task. The parent assigns task IDs and schedules creators for each partition; this is detailing
+   of the approved objective, not a new interview or tech-plan approval.
+
 4. Copy template to task file:
    - `cp {template_path} {feature_path}/tasks/{task_number}.md`
    - Ensure `tasks/` directory exists first (`mkdir -p {feature_path}/tasks`)
@@ -87,19 +97,23 @@ Do NOT touch `task-files-map.yml` in fix mode — only `mode=create` writes it.
    - Description, What to do, TDD Anchor, Acceptance Criteria, Context Files, Verification Steps, Details, Reviewers, Post-completion: replace placeholder content with real content based on tech-spec and code analysis
    - For non-code tasks: delete TDD Anchor section entirely
 
-6. Upsert `{feature_path}/task-files-map.yml` — YAML mapping from task id (`T-001`, `T-002`, ...) to the list of files that task modifies.
-   Source: this task's `files_to_modify` input. Task id format: `T-NNN` (zero-padded), derived from `task_number`.
-   Behavior: **merge, do not overwrite.** Load the existing file if present (empty mapping if absent); upsert this task's entry (`T-NNN: [files...]`), preserving all other task entries; write back. Each per-task invocation contributes exactly its own entry.
-   Why merge: `task-creator` is invoked per task, not once per decomposition. An overwrite would erase prior tasks' entries and silently break downstream file-overlap detection.
-   Format:
+6. Return a structured aggregation entry to the parent. Task id format is
+   `T-NNN` (zero-padded), derived from `task_number`:
    ```yaml
-   T-001:
-     - src/db/migrations/0042_add_last_seen.sql
-     - src/db/users.py
-   T-002:
-     - .claude/agents/coder.md
+   task_id: T-001
+   task_path: work/example/tasks/1.md
+   depends_on: []
+   wave: 1
+   task_files_map_entry:
+     task_id: T-001
+     files_to_modify:
+       - src/db/migrations/0042_add_last_seen.sql
+       - src/db/users.py
    ```
-   Consumer note: the orchestrator (`team-lead`) reads this file to detect file-overlap between tasks of the same wave. If two tasks share a file, the orchestrator serializes them instead of running in parallel.
+   The parent validates all returned entries and atomically writes the complete
+   `task-files-map.yml` and `tasks-manifest.yml`. The creator **MUST NOT write,
+   merge, append, or upsert either shared file in any mode**; concurrent
+   read-modify-write would lose sibling entries.
 
 ## Task File Structure
 
@@ -110,7 +124,7 @@ Do NOT touch `task-files-map.yml` in fix mode — only `mode=create` writes it.
 - skills: {from input, array}
 - verify: {from input, array of types: [smoke], [user], [smoke, user], or []}
 - reviewers: {from input, array}
-- teammate_name: {from input, optional — cosmetic name for agent teams}
+- teammate_name: {from input, optional human-readable worker label only; no routing, identity, role-binding, or model-binding semantics}
 
 ### 2. Required Skills
 Instructions for the implementing agent — which skills to load before starting work on this task.
@@ -185,8 +199,10 @@ Checklist:
 
 ### Atomicity rule (Decision 10)
 
-atomicity: 1 task = 1 PR-able unit + ≤5 files modified + single architectural concern.
-If a draft task would touch 6+ files OR span two orthogonal concerns (e.g. "rename column AND update analytics dashboard") → split before writing.
+atomicity: 1 task = 1 PR-able unit + single architectural concern. More than five modified paths
+is only a review heuristic. Cohesive non-mechanical vertical slices and production code plus its
+directly owned tests may exceed it. File count or category mix alone never blocks; split only
+multiple architectural concerns or independently separable outcomes. Atomicity determines count.
 
 ## Filled Example
 
@@ -265,4 +281,5 @@ alembic upgrade head && python -c "from src.db.users import update_user_last_see
 
 ## Output
 
-Return the file path when done.
+Return `task_id`, the task file path, `depends_on`, `wave`, and
+`task_files_map_entry` when done. Do not mutate shared aggregate files.

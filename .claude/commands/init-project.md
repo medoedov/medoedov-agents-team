@@ -9,48 +9,34 @@ allowed-tools:
 
 # Init Project
 
-## 1. Check Uncommitted Changes
+Read and follow `.claude/shared/pipeline-contract.md` before taking action. Its durable-state rules and completion gate are mandatory.
 
-If inside a git repo with uncommitted changes — ask user whether to commit first, continue without commit, or stop.
+## 1. Plan and Approval
 
-## 2. Apply Template
+1. Inspect the target without modifying it. If the target directory is non-empty, fail closed and stop before copying, moving, deleting, committing, or pushing anything.
+2. Present a concrete plan, including the target path, existing Git state, intended template source, collision and secrets checks, Git/GitHub actions, rollback, and durable-state location.
+3. Get explicit user approval for that plan before implementation. Prefer creating the project in a new, empty directory.
 
-Move existing files to `old/` (find next available name: `old`, `old2`, `old3`...):
+## 2. Safe Initialization
 
-```bash
-OLD_DIR="old"
-N=2
-while [ -e "$OLD_DIR" ]; do OLD_DIR="old${N}"; ((N++)); done
-mkdir "$OLD_DIR"
-find . -maxdepth 1 ! -name '.' ! -name '..' ! -name '.git' ! -name "$OLD_DIR" -exec mv {} "$OLD_DIR/" \;
-```
+For an empty target, apply the template with portable, platform-appropriate file operations. Do not use a POSIX-only inline script and do not issue a direct destructive command.
 
-Copy template:
+An in-place merge into a non-empty target is exceptional and requires separate, explicit user approval. Before any merge:
 
-```bash
-cp -rp .claude/shared/templates/new-project/. .
-```
+- Create staging and backup locations outside the tree whose contents could be moved or replaced.
+- Inventory every source/target collision and sensitive path (`.env*`, `*.key`, `*.pem`, `credentials.json`, `secrets/`) and show the inventory to the user.
+- Define and verify a rollback procedure that restores the original tree from the external backup.
+- Copy only the approved files. Never move the project root or bulk-move its contents into a child directory.
+- Stop on an unapproved collision, missing backup, failed verification, or rollback uncertainty.
 
-After copy:
-- Verify `.claude/skills/project-knowledge/` exists
-- Security check: look for sensitive files in `$OLD_DIR/` (`.env*`, `*.key`, `*.pem`, `credentials.json`, `secrets/`) not covered by `.gitignore`. If found — add to `.gitignore` before proceeding.
-- If `.claude/shared/scripts/sync_to_codex.py` exists, run
-  `python .claude/shared/scripts/sync_to_codex.py --project . --apply --prune`
-  and verify that `AGENTS.md`, `.agents/skills/`, and `.codex/agents/` exist.
+After applying the template, verify `.claude/skills/project-knowledge/` exists. If `.claude/shared/scripts/sync_to_codex.py` exists, run `python .claude/shared/scripts/sync_to_codex.py --project . --apply --prune` and verify that `AGENTS.md`, `.agents/skills/`, and `.codex/agents/` exist.
 
-## 3. Init Git and GitHub
+## 3. Git and GitHub Safety
 
-1. Init git if not initialized
-2. Verify `gh` CLI is installed and authenticated
-3. Ask user for GitHub repository name
-4. Create repo: `gh repo create {name} --private --source=. --remote=origin`
-5. Initial commit and push to current branch
-6. Create `dev` branch, push it
+Initialize or publish Git only if those actions were included in the approved plan. Never automatically commit or push the old project, unreviewed pre-existing files, credentials, or secrets. Before any commit or push, show the exact staged inventory and verify that ignore rules exclude sensitive paths. Repository creation and branch publication require their own explicit approval when they were not already approved.
 
-## 4. Final Report
+## 4. Durable State and Completion Gate
 
-Show user:
-- GitHub URL
-- Branches created
-- Old files location (`old/`) if any existed
-- Next step: run `project-planning` skill to fill project documentation
+Persist the plan, approval, target inventory, collision/secrets findings, backup and rollback details, files applied, verification results, Git actions, and any GitHub URL in the durable state required by `.claude/shared/pipeline-contract.md`.
+
+Do not report completion until the pipeline contract's completion gate passes: the approved target is initialized, required generated runtime files are verified, no unapproved collision or secret was published, rollback evidence exists for an in-place merge, and the durable report is written. Otherwise report the blocked or partial state and the exact recovery step.

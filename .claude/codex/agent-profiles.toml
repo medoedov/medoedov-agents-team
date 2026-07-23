@@ -1,0 +1,149 @@
+[runtime]
+max_threads = 5
+max_depth = 1
+default_fork_turns = "none"
+
+[profiles.advisor]
+model = "gpt-5.6-sol"
+effort = "low"
+source = ".claude/agents/advisor.md"
+
+[profiles.architect]
+model = "gpt-5.6-sol"
+effort = "high"
+source = ".claude/agents/architect.md"
+
+[profiles."bug-hunter"]
+model = "gpt-5.6-sol"
+effort = "high"
+source = ".claude/agents/bug-hunter.md"
+
+[profiles."code-auditor"]
+model = "gpt-5.6-sol"
+effort = "high"
+source = ".claude/agents/code-auditor.md"
+
+[profiles.coder]
+model = "gpt-5.6-sol"
+effort = "medium"
+source = ".claude/agents/coder.md"
+
+[profiles."code-researcher"]
+model = "gpt-5.6-terra"
+effort = "medium"
+source = ".claude/agents/code-researcher.md"
+
+[profiles."code-reviewer"]
+model = "gpt-5.6-sol"
+effort = "high"
+source = ".claude/agents/code-reviewer.md"
+
+[profiles."code-simplifier"]
+model = "gpt-5.6-terra"
+effort = "medium"
+source = ".claude/agents/code-simplifier.md"
+
+[profiles."deploy-infra-reviewer"]
+model = "gpt-5.6-sol"
+effort = "high"
+source = ".claude/agents/deploy-infra-reviewer.md"
+
+[profiles."documentation-reviewer"]
+model = "gpt-5.6-terra"
+effort = "medium"
+source = ".claude/agents/documentation-reviewer.md"
+
+[profiles.marketer]
+model = "gpt-5.6-terra"
+effort = "medium"
+source = ".claude/agents/marketer.md"
+
+[profiles."meta-reviewer"]
+model = "gpt-5.6-terra"
+effort = "medium"
+source = ".claude/agents/meta-reviewer.md"
+
+[profiles."post-deploy-qa"]
+model = "gpt-5.6-sol"
+effort = "high"
+source = ".claude/agents/post-deploy-qa.md"
+
+[profiles."pre-deploy-qa"]
+model = "gpt-5.6-sol"
+effort = "high"
+source = ".claude/agents/pre-deploy-qa.md"
+
+[profiles."product-manager"]
+model = "gpt-5.6-terra"
+effort = "medium"
+source = ".claude/agents/product-manager.md"
+
+[profiles."prompt-reviewer"]
+model = "gpt-5.6-sol"
+effort = "high"
+source = ".claude/agents/prompt-reviewer.md"
+
+[profiles."reality-checker"]
+model = "gpt-5.6-terra"
+effort = "medium"
+source = ".claude/agents/reality-checker.md"
+
+[profiles."security-auditor"]
+model = "gpt-5.6-sol"
+effort = "high"
+source = ".claude/agents/security-auditor.md"
+
+[profiles."skill-checker"]
+model = "gpt-5.6-sol"
+effort = "high"
+source = ".claude/agents/skill-checker.md"
+
+[profiles.sysadmin]
+model = "gpt-5.6-sol"
+effort = "high"
+source = ".claude/agents/sysadmin.md"
+
+[profiles."task-creator"]
+model = "gpt-5.6-terra"
+effort = "medium"
+source = ".claude/agents/task-creator.md"
+
+[profiles."task-validator"]
+model = "gpt-5.6-terra"
+effort = "medium"
+source = ".claude/agents/task-validator.md"
+
+[profiles."techspec-validator"]
+model = "gpt-5.6-terra"
+effort = "medium"
+source = ".claude/agents/techspec-validator.md"
+
+[profiles."tech-writer"]
+model = "gpt-5.6-terra"
+effort = "medium"
+source = ".claude/agents/tech-writer.md"
+
+[profiles."test-reviewer"]
+model = "gpt-5.6-sol"
+effort = "high"
+source = ".claude/agents/test-reviewer.md"
+
+[profiles."test-writer"]
+model = "gpt-5.6-sol"
+effort = "medium"
+source = ".claude/agents/test-writer.md"
+
+[profiles."userspec-validator"]
+model = "gpt-5.6-terra"
+effort = "medium"
+source = ".claude/agents/userspec-validator.md"
+
+[profiles."ux-designer"]
+model = "gpt-5.6-terra"
+effort = "medium"
+source = ".claude/agents/ux-designer.md"
+
+[profiles.watchdog]
+model = "gpt-5.6-terra"
+effort = "low"
+source = ".claude/agents/watchdog.md"

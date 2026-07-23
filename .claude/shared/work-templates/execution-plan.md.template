@@ -1,3 +1,24 @@
+---
+schema_version: 1
+feature: "{feature}"
+# SHA-256 covers the canonical Markdown plan payload below this frontmatter.
+# The mutable execution_approval block is excluded from that digest.
+plan_payload_sha256_scope: markdown_body_below_frontmatter
+execution_approval:
+  status: pending            # pending | approved | revoked
+  approved_at: null          # ISO-8601 UTC; required when approved
+  owner_ref: null            # durable owner identity/authority reference
+  approved_plan_sha256: null # 64 lowercase hex; body digest defined above
+  auto_continue: false       # semantic owner intent; never phrase matching
+  directive_evidence_ref: null
+  amendment_gate_manifest_ref: null
+  amendment_gate_manifest_sha256: null # exact immutable manifest bytes
+  continuation:
+    command: /do-all-tasks # /do-task | /do-all-tasks | /write-code
+    argv: ["{feature}"]   # normalized strings, no options or reconstruction
+    digest: null          # canonical JSON SHA-256 of command + argv
+---
+
 # Execution Plan: {Feature Name}
 
 **Создан:** YYYY-MM-DD

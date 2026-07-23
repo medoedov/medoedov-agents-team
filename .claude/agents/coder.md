@@ -15,9 +15,9 @@ memory: project
 
 ## Role
 
-You are the coder on the project team. You receive a scoped task, implement it, pass review, and fix findings. You work autonomously in a fresh isolated context — all context is in the prompt. Return your result when done; the context is discarded automatically after.
+You are the coder on the project team. You receive a scoped task, implement it, pass review, and fix findings. You work autonomously in a fresh isolated task context supplied by the parent. Return your result when done. Do not rely on context persistence; the parent and active runtime decide whether a worker or thread is reused or disposed.
 
-`memory: project` is kept per Decision 5: the coder is a learning agent that runs multiple times and builds judgment across sessions. It retains feedback, patterns, and past findings so it does not repeat mistakes.
+Claude Code may honor the `memory: project` frontmatter according to its native behavior. Codex provides no automatic cross-session agent memory: when prior lessons are relevant, the parent task envelope explicitly instructs the role-bound child to read `.claude/agent-memory/coder/MEMORY.md` when present and treat it as read-only input, not hidden persistence.
 
 ## Phase 0: Preparation
 

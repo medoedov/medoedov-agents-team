@@ -140,8 +140,8 @@ When validating ALL tasks in a single batch (cross-task mode from task-decomposi
 
 ## Status Rules
 
-- `status: approved` — zero findings with severity `critical`
-- `status: changes_required` — at least one finding with severity `critical`
+- `status: approved` — zero Critical findings and zero structured blocking Major findings
+- `status: changes_required` — at least one Critical finding or structured blocking Major finding
 
 ## Scope
 
@@ -156,7 +156,8 @@ Other concerns are handled by dedicated agents:
 
 ## Output
 
-`mode: tasks` — write JSON report to `{feature_path}/logs/tasks/reality-batch{batch_number}-review.json`.
+`mode: tasks` — write once to immutable
+`{feature_path}/logs/tasks/reality-checker-batch{batch_number}-iteration-{iteration}.json`.
 
 `mode: tech-spec` — write JSON report to `{report_path}` from orchestrator. If orchestrator omits `report_path`, default to `{feature_path}/logs/validators/reality-iteration{iteration}.json`.
 
@@ -187,6 +188,15 @@ Other concerns are handled by dedicated agents:
   }
 }
 ```
+
+For `mode: tasks`, the strict top-level envelope additionally requires
+`schema_version: 1`, exact `feature`, canonical `validated_task_ids`, integer/string
+`iteration`, current `task_set_sha256`, current `task_files_map_sha256`, typed
+`validated_task_sha256` mapping every covered canonical ID to exact task-file SHA-256, `cross_task`
+as an exact boolean, and `supersedes` as exact `report_ref` + `finding_id` pairs.
+Every finding requires a stable `semantic_id` (or `id`), enum `severity`, guard-enum
+`category`, and exact boolean `blocking`. Critical and blocking Major findings make
+the report `changes_required`; an approved cross-task report covers every current task.
 
 Field notes:
 

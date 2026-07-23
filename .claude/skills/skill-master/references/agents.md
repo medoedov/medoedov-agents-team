@@ -1,18 +1,20 @@
 # Skill + Agent Pattern
 
-Subagents handle context-heavy subtasks for orchestrator skills. Each runs in isolated context, performs work, and returns results (or modifies files directly).
+Parent-scheduled workers handle context-heavy subtasks for orchestrator skills. Each runs in
+isolated context, performs one bounded assignment, and returns structured evidence or
+explicitly scoped file changes.
 
-## Why Subagents
+## Why Isolated Workers
 
 The orchestrator's context window is limited. Loading a skill, conversation history, and project context already consumes significant space. If the orchestrator opens many files, runs extensive analysis, or generates verbose output, context fills up and quality degrades.
 
-**Solution:** Delegate heavy work to subagents. Each runs in isolated context, performs its task, and returns a structured result. The orchestrator receives only what it needs.
-
-**Impact:** According to Anthropic research, multi-agent systems with Claude Opus orchestrator and Claude Sonnet subagents outperform single-agent Claude Opus by 90.2% on research tasks.
+**Solution:** Delegate heavy work to isolated workers. Each performs one task and returns a
+structured result, so the parent receives only the evidence it needs.
 
 ## Orchestration Rules
 
-Subagents cannot call other subagents — Claude Code supports only one level of orchestration. Nested calls fail silently:
+Only the root parent schedules workers. Workers cannot schedule other workers; this keeps
+orchestration one level deep across supported runtimes:
 
 ```
 Orchestrator (main skill)
@@ -24,11 +26,18 @@ code-reviewer
     └── another-agent ✗ FORBIDDEN
 ```
 
-If subagent needs more work → return to orchestrator → orchestrator launches another subagent.
+If a worker needs more work, it returns evidence to the parent, which decides whether to
+schedule another bounded turn.
 
-## When to Use Subagents
+The parent schedules every worker through the current runtime after checking available
+capacity. Each worker receives named role instructions, minimal context, and a disjoint
+output contract. Do not request or claim a model override unless the runtime returns
+enforceable binding evidence. Runtime adapters may map this contract to Claude agents,
+Codex subagents, or another supported primitive without changing ownership or counts.
 
-| Task Type | Why Subagent Helps | Example |
+## When to Use Isolated Workers
+
+| Task Type | Why a Worker Helps | Example |
 |-----------|-------------------|---------|
 | Reviews | Fresh context for objective assessment | code-reviewer, security-auditor |
 | Research | Extensive file reading stays isolated | Exploring codebase, reading docs |
@@ -37,22 +46,12 @@ If subagent needs more work → return to orchestrator → orchestrator launches
 | Parallel work | Multiple independent directions | Research 3 modules simultaneously |
 | High-volume output | Tests, logs don't bloat main context | Running test suite, log analysis |
 
-## Inline Agents (Ad-hoc Tasks)
+## Ad-hoc Workers
 
-For simple, one-off tasks — use Task tool with built-in subagent types:
-
-```markdown
-Use Explore subagent to find all files related to authentication
-Use general-purpose subagent to analyze the error and suggest fixes
-Use Plan subagent to design implementation approach for {feature}
-```
-
-The orchestrator calls Task tool with arbitrary prompt and `subagent_type`. No agent file needed.
-
-**Built-in subagent types:**
-- `Explore` — fast codebase exploration, file search, pattern matching
-- `general-purpose` — flexible tasks, research, analysis
-- `Plan` — designing implementation approaches
+For a simple one-off task, the parent may schedule a bounded current-runtime worker without
+creating a reusable agent file. The prompt still names the role, objective, read/write scope,
+output contract, and verification evidence. Use descriptive roles such as exploration,
+diagnosis, or planning; a scheduling label alone is never proof of role or model binding.
 
 **When to use:**
 - Simple research/exploration
@@ -166,7 +165,7 @@ All agents must have a color for visual identification. Valid values: `red`, `bl
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `model` | `inherit` | Always use `inherit` to match orchestrator's model |
+| `model` | `inherit` | Desired runtime policy only; never claim it was enforced without binding evidence |
 | `allowed-tools` | All tools | Restrict to necessary tools (e.g., `Read, Glob, Grep`) |
 | `permissionMode` | `default` | Permission handling: `default`, `acceptEdits`, `bypassPermissions`, `plan` |
 | `hooks` | None | Lifecycle hooks for validation |
@@ -204,13 +203,11 @@ Agents always return JSON report — even if they modify files or execute comman
 }
 ```
 
-## Resuming Agents
+## Continuing Workers
 
-After agent completes, orchestrator receives `agentId`. Use it to continue work with same context:
-
-```
-Resume agent {agentId} to ask follow-up question about findings
-```
+If the current runtime returns a reusable worker identity, the parent may schedule a bounded
+follow-up turn on that worker. Treat the identity as routing metadata, not durable state or
+role/model evidence.
 
 **When to resume:**
 - Need clarification on agent's findings
@@ -244,12 +241,13 @@ description: |
 
 ## Invoking from Skills
 
-Reference agents by name in skill workflow:
+Reference named specialist roles in the skill workflow; the parent schedules them in bounded
+batches through the current runtime:
 
 ```markdown
 ## Post-work
 
-1. **Run Reviews** (launch in parallel)
+1. **Run Reviews** (parent schedules a bounded batch)
    - `code-reviewer` — quality, architecture, patterns
    - `security-auditor` — OWASP Top 10, vulnerabilities
 
@@ -273,7 +271,8 @@ Use `code-reviewer` subagent with:
 
 1. **Define clear output contract** — JSON for analysis, file changes for executors
 2. **Restrict tools** — Most agents only need `Read, Glob, Grep`
-3. **Use `model: inherit`** — Ensures maximum quality from orchestrator's model
+3. **Prefer `model: inherit` in Claude-compatible source** — Avoid an unnecessary override;
+   do not claim any model binding without enforceable runtime evidence
 4. **Always preload skill** — Agent must have methodology, not just output format
 5. **Include examples in description** — Helps Claude know when to invoke
 6. **One level of orchestration** — Subagents cannot call other subagents

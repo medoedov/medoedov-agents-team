@@ -1,15 +1,46 @@
-End of Agent Team working session.
+---
+description: Persist a durable session handoff without changing pipeline status.
+---
 
-Steps:
-1. Check the status of active tasks — identify any incomplete ones
-2. Launch the meta-reviewer:
-   Task(subagent_type="meta-reviewer", prompt="Analyze the session...", model="opus")
-3. Wait for the report
-4. Append lessons to .claude/agent-memory/team-lead/MEMORY.md under a new session entry
-5. Output a summary to the user:
-   - Tasks completed: N of M
-   - Key outcomes
-   - What remains for the next session
-   - Which improvements were applied
+# End Session
 
-If there are incomplete tasks — save them to work/backlog.md.
+Read `.claude/shared/pipeline-contract.md` first. Its durable state rules and
+completion gate define which artifacts are authoritative.
+
+## Collect state without mutating it
+
+1. Inspect active feature artifacts: `feature-status.yml`,
+   `logs/checkpoint.yml`, `tasks-manifest.yml`, and per-task
+   `logs/working/task-{task-id}/{task-id}.run.yml` pointers plus their contained
+   immutable `runs/{run-id}.run.yml` records.
+2. Summarize completed work, pending task IDs, blockers, unresolved findings,
+   verification evidence, and the next public command permitted by the
+   contract.
+3. Do not automatically change task, manifest, spec, checkpoint, QA, or feature
+   status. Ending a session is a handoff operation, not completion evidence.
+
+## Write the durable session report
+
+1. Create `work/session-reports/` if needed.
+2. Write a dated durable report such as
+   `work/session-reports/YYYY-MM-DDTHHMMSSZ.yml`. Include:
+   - report timestamp and current branch;
+   - active feature paths;
+   - pointers to each status/checkpoint/manifest artifact and to each validated immutable run;
+   - completed actions from this session;
+   - pending task IDs, blockers, and unresolved findings;
+   - the recommended next public command.
+3. Write `work/session-reports/latest.yml` as a small pointer containing only
+   the dated report path and timestamp. Update it atomically: write a temporary
+   file in `work/session-reports/`, flush/close it, then rename it over
+   `latest.yml`. Never partially overwrite the existing pointer.
+4. If `work/backlog.md` is used, store backlog pointers and task IDs only. Do
+   not copy requirements, task bodies, findings, or statuses into it. The
+   approved specs, manifests, immutable run records, and feature status collectively remain
+   the single source of truth.
+
+## Report to the user
+
+Return a concise summary with the dated report path, work completed, work still
+pending, blockers, and the recommended next public command. State explicitly
+that this command did not change task or feature completion status.

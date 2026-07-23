@@ -37,36 +37,30 @@ before proceeding.
 
 ## Phase 2: Setup
 
-1. TeamCreate(team_name="skill-test-{skill-name}")
-2. Plan: per scenario = 2 runners with skill + 1 baseline without skill
-3. Scenarios run sequentially. Runners within a scenario run in parallel.
-4. Show plan to user: "I'll run {N} scenarios, {M} runners total.
-   Model: {model from scenarios}. Proceed?"
+1. The parent builds a bounded plan: per scenario = 2 runners with the tested skill + 1 baseline without it.
+2. For A/B fairness, the three runners receive the same base prompt, persona answers, initial workspace snapshot, tools/capabilities, time budget, and runtime/model conditions. The only intended difference is access to the tested skill.
+3. A scenario's runners use isolated workspaces and disjoint result-artifact paths. They may run in parallel only when isolation is guaranteed and available slots permit it; otherwise the parent runs them in a balanced sequential order with the same reset state. Scenarios run sequentially.
+4. The scenario's requested model is a preference only when the current runtime supports explicit model selection. Otherwise use the same actual runtime/model for all variants and record the deviation; never claim an unsupported override.
+5. Show the plan to the user: "I'll run {N} scenarios, {M} runners total under the same recorded runtime conditions. Proceed?"
 
-**Checkpoint:** User confirmed the execution plan. Team created.
+**Checkpoint:** User confirmed the execution plan; isolation, slot budget, and A/B controls are recorded.
 
 ## Phase 3: Execute
 
 For each scenario:
 
 ### 3a. Spawn runners
-Spawn 2 runners that load the tested skill:
-- Prompt = scenario's task prompt (natural, as user would write)
-- Each runner: `Skill(skill="{tested-skill-name}")`
-- Model: as specified in scenario file
-- Use `run_in_background: true`
+The parent spawns three bounded isolated workers using the current runtime primitive and explicit runner-role instructions:
 
-Spawn 1 baseline runner:
-- Same task prompt
-- Receives no skill to load
-- Same model, same `run_in_background: true`
+- Skill runner A and skill runner B receive the natural scenario prompt and access to `{tested-skill-name}`.
+- The baseline receives the same prompt and context but no access to the tested skill.
+- Each runner writes a transcript/result artifact to its own path under the scenario's run directory and returns that path to the parent.
+- Runners do not share state, communicate with one another, or spawn additional workers.
 
-Save each runner's task_id from the spawn result. You need these to
-retrieve full transcripts for grading.
+The parent records the runtime handle and result-artifact path for each runner so grading never depends on an in-memory message alone.
 
 ### 3b. Interact as user
-Runners will send you questions. Answer in character per the scenario's
-persona. Rules:
+When the current runtime supports interaction, answer runner questions in character per the scenario's persona. Otherwise inject the same deterministic persona answers into each isolated run. Rules:
 - Stay in character: answer as the user would
 - Be consistent: same question from different runners → same answer
 - Answer naturally, as a real user would — without guidance toward any
@@ -78,18 +72,15 @@ persona. Rules:
 
 ### 3c. Grade via grader agents
 
-When all 3 runners finish, DO NOT read transcripts yourself — they are too
-large and will fill your context. Instead, spawn grader agents (one per
-runner) that read transcripts and return structured evaluations.
+When all three runners finish, the parent schedules one isolated grader worker per runner using the current runtime primitive. Graders receive explicit grader-role instructions, minimal read-only evidence, and disjoint evaluation-artifact paths. They do not share state or spawn additional workers.
 
-For each runner, spawn a grader via Task (not a team member, just a
-subagent). Each grader receives:
+Each grader receives:
 
-1. The runner's task_id (grader calls `TaskOutput(task_id)` to get the full
-   transcript with every tool call: Read, Grep, Write, WebFetch, Bash, Skill)
+1. The runner's durable transcript/result-artifact path or runtime-supported read-only transcript handle, including tool calls and created outputs
 2. The scenario's acceptance criteria (copy the criteria list into the prompt)
 3. The skill's SKILL.md path (grader reads it for compliance check)
 4. Whether this is a skill-runner or baseline
+5. Its own evaluation-artifact path, returned to the parent after grading
 
 Grader returns a structured evaluation:
 
@@ -124,7 +115,7 @@ Grader rules (include in grader prompt):
 - For outcome criteria: cite file content (read the created files)
 - For compliance criteria: cite Bash calls for scripts
 
-Spawn all 3 graders in parallel (one per runner). Wait for all to return.
+The parent runs graders in parallel only when their inputs and outputs are independent and available slots permit it; otherwise it uses bounded batches. Wait for all evaluation artifacts, then aggregate them centrally.
 
 ### 3d. Compile results
 
@@ -141,7 +132,7 @@ transcripts. Using only the grader outputs:
 4. Identify skill issues and ambiguities
 
 ### 3e. Cleanup
-Shutdown all runners for this scenario.
+Release all runtime workers and isolated workspaces for this scenario after their durable artifacts are verified. Do not depend on shared team state for cleanup.
 
 ## Phase 4: Report
 
@@ -150,7 +141,6 @@ Compile results from all scenarios following
 
 Save to: `~/.claude/skill-tests/{skill-name}/reports/{timestamp}-report.md`
 Show report to user.
-TeamDelete.
 
 ## Self-Verification
 
@@ -160,4 +150,4 @@ TeamDelete.
 - [ ] Skill compliance checked for each runner
 - [ ] Baseline comparison completed per criterion
 - [ ] Report saved to expected path and shown to user
-- [ ] Team deleted after report delivery
+- [ ] Runtime workers released after durable runner and grader artifacts were verified

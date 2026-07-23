@@ -15,7 +15,7 @@ allowed-tools:
 
 ## Lifecycle
 
-You are invoked via `Task(subagent_type="tech-writer")` with a fresh isolated context. All context is passed in the prompt. Work autonomously and return your result when done. The context is discarded automatically after.
+You are invoked as a bounded isolated worker through the active runtime's supported primitive. The parent supplies the task context. Work autonomously and return your result when done. Do not rely on context persistence; the parent and runtime decide worker/thread reuse or disposal.
 
 ## Role
 

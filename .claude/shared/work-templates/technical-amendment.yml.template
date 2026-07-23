@@ -1,0 +1,86 @@
+# Canonical post-approval technical execution amendment record.
+schema_version: 2
+record_path: work/{feature}/logs/technical-amendments/{amendment-id}.yml
+amendment_id: amendment-id
+classification: technical_execution_amendment
+
+# Validator derives categories/objectives from the manifest-bound delta and
+# requires semantic evidence for every remaining policy signal.
+classification_inputs:
+  change_categories: [runner, mapping, task_envelope]
+  objective_ids: [approved-objective-id]
+  evidence_ref: work/{feature}/logs/classification-evidence.json
+  evidence_sha256: null
+
+# All identity values are derived from immutable failure evidence and approval.
+root_blocker_id: null
+repair_loop_id: null
+blocker_fingerprint: null
+failing_gate_id: approved-gate-id
+failure_evidence_ref: work/{feature}/logs/failure-evidence.json
+failure_evidence_sha256: null
+
+base_approval_ref: work/{feature}/logs/execution-plan.md#execution_approval
+approved_plan_sha256: null
+
+objective_trace:
+  - objective_id: approved-objective-id
+    before_artifact_ref: work/{feature}/tech-spec.md
+    before_section_ref: "#Approved Objective"
+    before_sha256: null
+    after_artifact_ref: work/{feature}/tech-spec.md
+    after_section_ref: "#Approved Objective"
+    after_sha256: null
+
+allowed_delta:
+  changed_plan_task_artifacts:
+    - path: work/{feature}/tasks/T-001.md
+      before_sha256: null
+      after_sha256: null
+      objective_ids: [approved-objective-id]
+      task_ids: [T-001]
+      category: task_envelope
+  task_file_map:
+    path: work/{feature}/task-files-map.yml
+    before_sha256: null
+    after_sha256: null
+  added_or_changed_write_paths:
+    - path: .claude/shared/scripts/example-runner.ps1
+      change: added
+      before_sha256: null
+      after_sha256: null
+      objective_ids: [approved-objective-id]
+      task_ids: [T-001]
+      category: runner
+
+acceptance_criteria:
+  before_artifact_ref: work/{feature}/user-spec.md
+  before_section_ref: "#Acceptance Criteria"
+  before_sha256: null
+  after_artifact_ref: work/{feature}/user-spec.md
+  after_section_ref: "#Acceptance Criteria"
+  after_sha256: null
+
+required_gate_ids: [approved-gate-id]
+validation_results:
+  - gate_id: approved-gate-id
+    status: passed
+    evidence_ref: work/{feature}/logs/approved-gate-terminal.json
+    evidence_sha256: null
+
+# The directory contains immutable attempt-NNN.yml records and exactly one
+# digest-chained head.yml. Create every file no-clobber.
+technical_validation_ledger:
+  directory_ref: work/{feature}/logs/technical-amendment-attempts/{fingerprint}
+  head_ref: work/{feature}/logs/technical-amendment-attempts/{fingerprint}/head.yml
+  head_sha256: null
+
+task_review_fix_attempts:
+  before: 0
+  after: 0
+  unchanged: true
+
+classification_rationale: null
+status: validated
+created_at: null
+updated_at: null
