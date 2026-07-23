@@ -27,9 +27,8 @@ completion gate define which artifacts are authoritative.
 ## Collect state without mutating it
 
 1. Inspect active feature artifacts: `feature-status.yml`,
-   `logs/checkpoint.yml`, `tasks-manifest.yml`, and per-task
-   `logs/working/task-{task-id}/{task-id}.run.yml` pointers plus their contained
-   immutable `runs/{run-id}.run.yml` records.
+   `logs/checkpoint.yml`, and `tasks-manifest.yml`, including each task's
+   recorded frontmatter status.
 2. Summarize completed work, pending task IDs, blockers, unresolved findings,
    verification evidence, and the next public command permitted by the
    contract.
@@ -43,7 +42,7 @@ completion gate define which artifacts are authoritative.
    `work/session-reports/YYYY-MM-DDTHHMMSSZ.yml`. Include:
    - report timestamp and current branch;
    - active feature paths;
-   - pointers to each status/checkpoint/manifest artifact and to each validated immutable run;
+   - pointers to each status/checkpoint/manifest artifact;
    - completed actions from this session;
    - pending task IDs, blockers, and unresolved findings;
    - the recommended next public command.
@@ -53,7 +52,7 @@ completion gate define which artifacts are authoritative.
    `latest.yml`. Never partially overwrite the existing pointer.
 4. If `work/backlog.md` is used, store backlog pointers and task IDs only. Do
    not copy requirements, task bodies, findings, or statuses into it. The
-   approved specs, manifests, immutable run records, and feature status collectively remain
+   approved specs, manifests, and feature status collectively remain
    the single source of truth.
 
 ## Report to the user

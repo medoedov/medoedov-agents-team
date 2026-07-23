@@ -51,9 +51,8 @@ bounded snapshot of that signal to the watchdog. If it does not, mark the field
 
 Supported evidence is limited to:
 
-- durable `work/{feature}/logs/checkpoint.yml` state;
-- canonical current-run pointers, their validated immutable task runs, and expected
-  reviewer-report paths;
+- durable `work/{feature}/logs/checkpoint.yml` state, including recorded task status;
+- expected reviewer-report paths;
 - filesystem timestamps obtained through the permitted patterns below;
 - explicit status/events supplied by the parent from runtime-native tools; and
 - an explicit rate-limit error supplied by the parent or already recorded in a
@@ -66,20 +65,11 @@ agent identity from filesystem inactivity.
 
 1. Read the feature checkpoint. If it is absent, malformed, or ambiguous,
    return `classification: unknown` and recommend parent inspection.
-2. If `awaiting_user.active: true`, inspect only its structured
-   `amendment_ref` and apply
-   `.claude/shared/pipeline-contract.md#post-approval-amendment-classification`.
-   Never classify from the free-form question. If the record is not yet
-   validated by `.claude/shared/scripts/validate_technical_amendment.py`, recommend
-   parent revalidation; the watchdog does not clear it. Durable validator
-   evidence is required.
-   If the validated record proves a false technical gate, return
-   `classification: false-technical-approval-gate` and recommend the canonical
-   parent clear-and-continue action. For a product/authority result, return
-   `classification: awaiting-user`; do not ping or count the wait as stale.
-3. Resolve current-run pointers through containment, ID, digest, and supersedes-chain
-   validation, then compare checkpoint expectations with the selected immutable terminal
-   runs and expected review report paths. A missing report is evidence only when the
+2. If `awaiting_user.active: true`, return `classification: awaiting-user` and
+   recommend parent inspection; the watchdog does not clear the wait or classify
+   the underlying question itself. Do not ping or count the wait as stale.
+3. Compare checkpoint expectations with recorded task status and expected review
+   report paths. A missing report is evidence only when the
    checkpoint names that report and its durable deadline has passed.
 4. Use runtime agent status only when the parent supplied it from an exposed
    capability. `idle`, `completed`, and `not_found` are distinct; missing status
@@ -150,10 +140,10 @@ Every completed invocation produces exactly one entry with this shape:
   "sweep_id": "uuid4",
   "ts": "ISO-8601 UTC",
   "feature": "feature-name",
-  "classification": "healthy|awaiting-user|false-technical-approval-gate|stale|rate-limit|resume-due|unknown",
+  "classification": "healthy|awaiting-user|stale|rate-limit|resume-due|unknown",
   "evidence": [],
   "unavailable_signals": [],
-  "recommended_parent_action": "none|inspect|re_prompt|interrupt|resume|revalidate-and-continue",
+  "recommended_parent_action": "none|inspect|re_prompt|interrupt|resume",
   "redacted": true
 }
 ```

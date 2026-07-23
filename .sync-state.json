@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_sync_at": "2026-07-23T05:32:06Z",
+  "last_sync_at": "2026-07-23T17:45:35Z",
   "files": [
     {
       "path": "CLAUDE.md",
@@ -12,7 +12,7 @@
     },
     {
       "path": ".claude/team-lead.md",
-      "sha256": "6a58ba441b0ec86ed2d1ab9a1c9d1a8c55084432764b5625b85a757bf492fd51"
+      "sha256": "8284690f0c46bacea7185ec493367f8263ab1cb584ff6ffbcc345081d9e1831d"
     },
     {
       "path": ".claude/agent-memory/architect/MEMORY.md",
@@ -188,7 +188,7 @@
     },
     {
       "path": ".claude/agents/watchdog.md",
-      "sha256": "19fd21f8ddf9bf9e1cbcc56d07f8878a1d05e3b655f70034c792b1e37874a16f"
+      "sha256": "3f2b85031c3ca40ac0ece63cfcbf43fbdb2290779ce1fd9344366de0cf386a09"
     },
     {
       "path": ".claude/codex/agent-profiles.toml",
@@ -196,7 +196,7 @@
     },
     {
       "path": ".claude/codex/privileged-roles.md",
-      "sha256": "23fde5e093d602289587d1f598f284afcd6267f7ab0d4c636230572dc2a80153"
+      "sha256": "1422ddd12a10eb802e5219dfc2cd12e931401c25a7f715b81c89600140b9e5e4"
     },
     {
       "path": ".claude/codex/runtime-contract.md",
@@ -208,19 +208,19 @@
     },
     {
       "path": ".claude/commands/do-all-tasks.md",
-      "sha256": "5fd4dcd178dbbddf8afd75f9f553bd1a770e766d8349134051b395996032ad3f"
+      "sha256": "1e5a77f80a5b5386ce5965a3c498868774426e7f17d72a662958e9206df2e4b5"
     },
     {
       "path": ".claude/commands/do-task.md",
-      "sha256": "aced58d1b5dc527d20f81514bf3a73bc050bf685e420933f802d758feec284ab"
+      "sha256": "a0a641243c57c7c607772f25b0cf9e0f11f7edc95fd477832915b1409a558691"
     },
     {
       "path": ".claude/commands/done.md",
-      "sha256": "afaf39798095630a61dc706d0398933631387aab53a54f9336434489b4284e79"
+      "sha256": "b6d2e9548545ce5290391ff7c57d6ff09c3a81d392cd1613c1783d18dea9975d"
     },
     {
       "path": ".claude/commands/end-session.md",
-      "sha256": "d3556b3debf5dac82b266e3fe0f2ae6bbe5e932f9c8a8fb85cbf8acf4dc4213e"
+      "sha256": "ac85b9c4349096d4e0be4926e8845026707e764bd240f974165109a1fe4e0d34"
     },
     {
       "path": ".claude/commands/init-project-knowledge.md",
@@ -244,11 +244,11 @@
     },
     {
       "path": ".claude/commands/start-session.md",
-      "sha256": "8d46cd02082111278ad83bbbd6d4c1c9d3c655eed4a2af64e71cce228a886ad1"
+      "sha256": "15748f6fa509b235a837362ba02c8ee5cba357487b00b70d20a687c6ca730a07"
     },
     {
       "path": ".claude/commands/sweep-watchdog.md",
-      "sha256": "b9408a1991e334ade72978a8fc9354b6efe6bf79344af06ed1b0a61e8a656e59"
+      "sha256": "f2c830d99eb2b0cc0fc9ab38e65c739c0c94625e707aa353feb8f518a9dd70d9"
     },
     {
       "path": ".claude/commands/sync-codex.md",
@@ -264,7 +264,7 @@
     },
     {
       "path": ".claude/commands/write-code.md",
-      "sha256": "fc0abe396ebe5b1743c9703e7b1824a7d2ca4aa564360b595e72bd83b96f2d83"
+      "sha256": "b1ea706afea9b701e49d5d0b47defb7601b6286d20c2dac317bf8b3514e4c584"
     },
     {
       "path": ".claude/hooks/post-compact-restore.sh",
@@ -280,7 +280,7 @@
     },
     {
       "path": ".claude/shared/pipeline-contract.md",
-      "sha256": "972a90dd8a4d2a591d52dfae07d4032d26bf3ed19479c78564dc45c95789051f"
+      "sha256": "7d944521c4b79cefb975adeb6ea900f3388136e627364325536b1724dfc4d810"
     },
     {
       "path": ".claude/shared/interview-templates/feature.yml",
@@ -305,10 +305,6 @@
     {
       "path": ".claude/shared/scripts/validate_tasks_manifest.py",
       "sha256": "aec77ec9e907f2a0ceb6334f9ccf1e2a2c720d96f8897c6b0d4afa3b065a85c3"
-    },
-    {
-      "path": ".claude/shared/scripts/validate_technical_amendment.py",
-      "sha256": "25727e178adf4483dc9480d3a76945ddbe6e5d42ab7dbf31d9e09037dc4d048e"
     },
     {
       "path": ".claude/shared/templates/old-folder-audit.md",
@@ -379,12 +375,8 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
-      "path": ".claude/shared/work-templates/amendment-gate-manifest.yml.template",
-      "sha256": "4ec7e0f72442dfcc30bb6a2d6ca28854a3ec2239c6c376d4a20ada4dac594f95"
-    },
-    {
       "path": ".claude/shared/work-templates/checkpoint.yml.template",
-      "sha256": "bc668d07b0e166ef3b6717f0967656e698c749228cf8b789144beb43c10f016c"
+      "sha256": "a422b3db88e070e271714b94b4c2767414a0149f3eea1b74d37171664cc832fd"
     },
     {
       "path": ".claude/shared/work-templates/decisions.md.template",
@@ -392,15 +384,11 @@
     },
     {
       "path": ".claude/shared/work-templates/execution-plan.md.template",
-      "sha256": "53ae8a3bf9b8b589b2d4353c5be9ce8616a4ea0811cc0444e5f283840d6c8371"
+      "sha256": "be0d9cc39ab0d31493c6e615d7879835cfb69fc5d54585fe29a21eabccdec30e"
     },
     {
       "path": ".claude/shared/work-templates/tech-spec.md.template",
       "sha256": "2e6654545839f92322eadbc29178bde9bb5df09704b983f28d1fa66ac7650679"
-    },
-    {
-      "path": ".claude/shared/work-templates/technical-amendment.yml.template",
-      "sha256": "75a4aa3e19651217e791512d9d131b31819c3d7918fb81913bd5f937e2ba0689"
     },
     {
       "path": ".claude/shared/work-templates/user-spec.md.template",
@@ -408,7 +396,7 @@
     },
     {
       "path": ".claude/shared/work-templates/tasks/task.md.template",
-      "sha256": "c6893bc80b7a23afbe3ed4c17a35a237ff6e1be6d1de64ee50783ccb3a1b1367"
+      "sha256": "ed95d78331e1b7f0b51851d0c0dc4ca81af0642f68a8dbf0dd6a387a882e0123"
     },
     {
       "path": ".claude/shared/work-templates/tasks/tasks-manifest.yml.template",
@@ -420,7 +408,7 @@
     },
     {
       "path": ".claude/skills/code-writing/SKILL.md",
-      "sha256": "f11be2d71bb9f562e33af75f6225ff519410b76134d41b597ed0c7f76d27aedb"
+      "sha256": "4d585ab4a5c704ed02799a992c07d10a42ca9f8f6617d8ecf728596bfd4d0a8e"
     },
     {
       "path": ".claude/skills/code-writing/references/testing-guide.md",
@@ -440,7 +428,7 @@
     },
     {
       "path": ".claude/skills/feature-execution/SKILL.md",
-      "sha256": "a7e1c82263119161ebf853256c3495dc5395220337978d0ad585b438502650a3"
+      "sha256": "05dec1ba4eb397dcd1c870369c0b030d2652d1fb24a1c50bcc3faeacf7556b97"
     },
     {
       "path": ".claude/skills/infrastructure-setup/SKILL.md",
@@ -452,7 +440,7 @@
     },
     {
       "path": ".claude/skills/methodology/SKILL.md",
-      "sha256": "bafd94a6df333126985d907e6c514c489c03f4d4b3ca5db3998fd5b831276277"
+      "sha256": "1e039ee9d6b80c3fa93a3722d99af389927b4d63cbf8c9008a47396096dd3f07"
     },
     {
       "path": ".claude/skills/post-deploy-qa/SKILL.md",
@@ -548,11 +536,11 @@
     },
     {
       "path": ".claude/skills/task-decomposition/SKILL.md",
-      "sha256": "0db6679bde820a11317241c2f179e6464d22e4f7e86e4e22b3d7d5389831905e"
+      "sha256": "360fa6a0cf6eb6c951bf7dbfa1a5839df50914d08f7b2b04fed9121ed4c4b6a7"
     },
     {
       "path": ".claude/skills/task-execution/SKILL.md",
-      "sha256": "de961a0aaf98d6cdd39aba59fdbd9d093a2516ef365c39d05e115621666e70c1"
+      "sha256": "760c42f9f021eedb9fcc576005422903a03a73d78a06c0c75b4924e6f8dfe521"
     },
     {
       "path": ".claude/skills/tech-planning/SKILL.md",
@@ -592,7 +580,7 @@
     },
     {
       "path": ".agents/skills/team-lead/SKILL.md",
-      "sha256": "e80a02af49ba4883d5775513a0f4cebdd2ce8be114ef7d03567c74fe4ef36682"
+      "sha256": "657c7d8a0bd01e716200be87d87bf3ee96a2c5d2f338acb50a1998c302d51ecc"
     },
     {
       "path": ".codex/consultant-base.md",
@@ -608,7 +596,7 @@
     },
     {
       "path": ".codex/privileged-roles.md",
-      "sha256": "308c01a647a00f5108337815bfbe1233d4f3fc531e3dd6dc6337a1c26217f303"
+      "sha256": "a79c50b221e40d83028f76a399ea5b85002358ecc2ded38e53a5f862f04b238e"
     },
     {
       "path": ".agents/skills/code-reviewing/SKILL.md",
@@ -624,7 +612,7 @@
     },
     {
       "path": ".agents/skills/code-writing/SKILL.md",
-      "sha256": "5ebc90dedebf60c54ca8bc8924872a0e6bcac64300540a3ed93a11a9915be2c5"
+      "sha256": "791a5bc3fb01cd6a0b31099fae71eea0d14f5925575defe233e6e92cd9d06ce2"
     },
     {
       "path": ".agents/skills/deploy-pipeline/SKILL.md",
@@ -636,7 +624,7 @@
     },
     {
       "path": ".agents/skills/feature-execution/SKILL.md",
-      "sha256": "e337abb8db395f63a85664e53b7293a3a4aae763e80e74eaa519d76afb381ffe"
+      "sha256": "8466aa2b8ddb8dbfa6c31109fb2fef567553240e3796ce20d31dc4e9133308fa"
     },
     {
       "path": ".agents/skills/infrastructure-setup/SKILL.md",
@@ -648,7 +636,7 @@
     },
     {
       "path": ".agents/skills/methodology/SKILL.md",
-      "sha256": "77921c0478fa0ba54f3dd20e49080a1cb3bb82db811d750d59b4a893c507170b"
+      "sha256": "517e4b36c4c6a09cc2a84159603e40544bef8f0d78d8c2796f1a6db7c77d3543"
     },
     {
       "path": ".agents/skills/post-deploy-qa/SKILL.md",
@@ -744,11 +732,11 @@
     },
     {
       "path": ".agents/skills/task-decomposition/SKILL.md",
-      "sha256": "bd680718b706ee3697e29af8612eeb959f649eca957e9feab0cb847620e840b3"
+      "sha256": "7f1e985d91b68f9dc98b0f71b5d2cee6644840ad9c0536939779f49fb62a0f87"
     },
     {
       "path": ".agents/skills/task-execution/SKILL.md",
-      "sha256": "fca57bc5e01737b5b828c95b1b3e7c30ee6214deccf6ff5eeba2d7c215aa2aa7"
+      "sha256": "06bf96e80a8ef16f219d1882959fc07a89479a876c70598e4373df8dab67e844"
     },
     {
       "path": ".agents/skills/tech-planning/references/skills-and-reviewers.md",
@@ -892,7 +880,7 @@
     },
     {
       "path": ".codex/agents/watchdog.toml",
-      "sha256": "d3bf2cd73b67328bb4ff0c683fdf5a65f44163681063e4adfd75da80c4227805"
+      "sha256": "5ae8608a10500b2ce0bd477085084e855d2de57fd629ae5b28202be6172eda01"
     },
     {
       "path": ".agents/skills/source-command-advisor/SKILL.md",
@@ -900,19 +888,19 @@
     },
     {
       "path": ".agents/skills/source-command-do-all-tasks/SKILL.md",
-      "sha256": "eea81e3b81ab72af8ea1be31285740d132f570fd7e732732566f728dfa6dba28"
+      "sha256": "d1d5ca54f541c3910ddc57adcb3a1907aaaebc6d55fd63177d1b3241533aae45"
     },
     {
       "path": ".agents/skills/source-command-do-task/SKILL.md",
-      "sha256": "b33deca6634e68366ce2a783585c50851cfc049ecfc1eb1d9218da96fb7f19d9"
+      "sha256": "1fee036f0664903daaec11980d0bbc202d3f5659966df17e58739892fc7a024d"
     },
     {
       "path": ".agents/skills/source-command-done/SKILL.md",
-      "sha256": "fd634eab0084664356420224ccf9294ae7466b820225147f32cbf7c959eaac89"
+      "sha256": "6a1ca1858721346bb5c2c26c2b699b43eed9e9e7a2c932b9f349f1395ba056ee"
     },
     {
       "path": ".agents/skills/source-command-end-session/SKILL.md",
-      "sha256": "4e35fec32c30cbfc6053e5149c40548c4b6fcbe60d225aab08f9898cbeb943cb"
+      "sha256": "6d73f558c172e453962188b764f3539979fc3ae15a6f56fb442c23f32562b3cb"
     },
     {
       "path": ".agents/skills/source-command-init-project-knowledge/SKILL.md",
@@ -936,11 +924,11 @@
     },
     {
       "path": ".agents/skills/source-command-start-session/SKILL.md",
-      "sha256": "576c9b33f41a32a7a2d1dc2c1ab494cbeed92d26f7d2499f6ffcf7b328a9ba4f"
+      "sha256": "b7db16b6234a9189eb71feb91c4e867b62a1e2148d5ea75635e01b78e90eaf68"
     },
     {
       "path": ".agents/skills/source-command-sweep-watchdog/SKILL.md",
-      "sha256": "e90a5e7e3550437976cffc9d15ecc34e478e19387566eb745c4854b65d0807ce"
+      "sha256": "ae2ff6a6298535bf3eebe6b24a0e3b3b7b8d0879eeb0cbf29aa55b6e2307ca0d"
     },
     {
       "path": ".agents/skills/source-command-sync-codex/SKILL.md",
@@ -956,7 +944,7 @@
     },
     {
       "path": ".agents/skills/source-command-write-code/SKILL.md",
-      "sha256": "b8873e6e0fde89d74b000dd07cf589da68b075baddede807ad65aa29ad8789a8"
+      "sha256": "57b126f69ea29b0ca27c3066a3be1cc9e1a77e5b588fbcc011b6da62ac220fb1"
     },
     {
       "path": ".codex/hooks/checkpoint_context.py",
@@ -968,7 +956,7 @@
     },
     {
       "path": ".codex/.sync/claude-to-codex.json",
-      "sha256": "cd73055aea6f42ff0407c2ee1cdb54e9bc5ed42b42d831f78622054c424a3907"
+      "sha256": "b41e1eaf34bba863502787560c4cbdc16023e0e1dd09713c75baff64fe2014d8"
     }
   ]
 }

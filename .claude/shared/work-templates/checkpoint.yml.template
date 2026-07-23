@@ -13,68 +13,6 @@ feature_dir: work/{feature}
 execution_plan: work/{feature}/logs/execution-plan.md
 team_name: {feature}
 
-execution_approval_projection:
-  plan_ref: work/{feature}/logs/execution-plan.md
-  status: pending            # pending | approved | revoked
-  approved_at: null          # ISO-8601 UTC; required when approved
-  owner_ref: null            # durable owner identity/authority reference
-  approved_plan_sha256: null # digest of canonical plan payload
-  auto_continue: false       # semantic owner intent, not phrase matching
-  directive_evidence_ref: null
-  amendment_gate_manifest_ref: null
-  amendment_gate_manifest_sha256: null
-  continuation:
-    command: /do-all-tasks
-    argv: ["{feature}"]
-    digest: null
-  projection_sha256: null    # canonical JSON of every field above
-
-technical_amendment:
-  active_amendment_ref: null # logs/technical-amendments/{amendment-id}.yml
-  amendment_id: null
-  classification: null       # technical_execution_amendment | product_authority
-  classification_evidence_ref: null
-  status: null               # draft | validating | validated | technical-repair-exhausted
-  root_blocker_id: null
-  generation: 0             # source=0; all descendants for this root inherit 1
-  bounded_path_used: false  # root-scoped and inherited
-  repair_loop_id: null
-  blocker_fingerprint: null
-  base_approval_ref: null
-  approved_plan_sha256: null
-  acceptance_criteria_ref: null
-  required_gate_ids: []
-  validation_results_ref: null
-  ledger_head_ref: null
-  ledger_head_sha256: null
-  validator_evidence_ref: null
-  validator_evidence_sha256: null
-
-resume_ready:
-  active: false               # nonblocking handoff when auto_continue is false
-  decision: null              # direct_resume | resume_ready
-  amendment_ref: null
-  validator_evidence_ref: null
-  validator_evidence_sha256: null
-  continuation: null          # exact approval-owned command/argv/digest
-
-# Parent-owned recovery state for in-scope implementation defects. This is a
-# new task decomposition, not round 4 of the source task's attempt loop.
-implementation_remediation:
-  active: false
-  status: null                # partitioning | validating | ready | running | exhausted
-  source_task_id: null
-  source_shape: null          # legacy_non_atomic | atomic
-  trigger_round: null
-  root_blocker_id: null
-  generation: 0             # source=0; all replacement descendants inherit 1
-  unresolved_finding_ids: [] # deduplicated stable semantic identities
-  replacement_task_ids: []
-  guard_evidence_ref: null
-  guard_evidence_sha256: null
-  bounded_path_used: false   # one bounded path for an already atomic source task
-  continuation: null         # exact existing approval-owned command/argv
-
 last_completed_wave: 0
 total_waves: 0
 
@@ -101,20 +39,18 @@ stall_state:
   last_active_wave: null      # integer wave index for resume
   resume_attempts: 0          # escalate to user after 3 failed attempts
 
-# Conversational decisions only; never a native Codex permission card.
-# Write this block once atomically, then keep the wait quiescent: no rewrite or repeat
-# without new user or external evidence.
+# Set by the parent whenever it poses a blocking question/decision to the user
 # and the run cannot proceed without an answer (plan approval, reviewer-conflict
 # choice, escalation reply, deploy go-ahead). While active == true the watchdog
 # sweep short-circuits and pings NOTHING — the run is legitimately waiting on the
-# user, not stalled. Team-lead clears it (active: false) the moment the user
+# user, not stalled. The parent clears it (active: false) the moment the user
 # replies and work resumes. This is the fix for "watchdog pings agents that are
 # blocked on my decision".
+#
+# Write this block once atomically, then keep the wait quiescent: no rewrite or
+# repeat without new user or external evidence.
 awaiting_user:
   active: false               # bool — run blocked on a user decision; suppress all pings
   since: null                 # ISO-8601 timestamp the block began
   question: null              # short label of what the user is being asked (for the sweep log)
   blocked_teammates: []       # teammate names parked behind this decision (informational)
-  amendment_ref: null         # structured amendment record; never infer from question
-  cleared_reason: null        # false_technical_approval_gate after verified recovery
-  cleared_at: null            # ISO-8601 UTC, atomically written with active: false

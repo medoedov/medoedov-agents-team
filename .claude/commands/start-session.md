@@ -20,36 +20,21 @@ command.
    - `feature-status.yml`
    - `logs/checkpoint.yml`
    - `tasks-manifest.yml`
-   - task current-run pointers under `logs/working/task-{task-id}/{task-id}.run.yml`
-     and immutable records under the sibling `runs/` directory
-3. Validate each pointer's containment, ID, digest, and supersedes chain. Treat only the
-   selected latest approved immutable task run and `feature-status.yml` as terminal
-   evidence. A pointer alone, checkpoint, session report, `decisions.md`, or backlog text
+3. Treat only `feature-status.yml` and each task's own frontmatter/checkpoint status as
+   terminal evidence. A checkpoint alone, session report, `decisions.md`, or backlog text
    is recovery context only and must not be promoted to completion proof.
-4. Apply
-   `.claude/shared/pipeline-contract.md#post-approval-amendment-classification`
-   to any referenced post-approval artifact amendment. Invoke
-   `.claude/shared/scripts/validate_technical_amendment.py` and require durable
-   no-clobber validator evidence plus its atomic checkpoint transition. Only
-   that transition may set `cleared_reason: false_technical_approval_gate`,
-   `cleared_at`, and `awaiting_user.active: false`, clear stale wait metadata,
-   and bind the validator evidence reference/hash. It must not synthesize user
-   approval.
+4. If `awaiting_user.active: true` in a feature's checkpoint, confirm the recorded
+   question was actually answered before clearing it (`active: false`) and resuming.
+   It must not synthesize user approval from a free-form guess.
 5. Summarize the restored feature, current gate, pending task IDs, blockers,
    and the last recommended public command. Ask the user what to continue when
    more than one active feature exists.
 
 ## Resume precedence
 
-When there is exactly one resume target, a valid
-`execution_approval_projection`, a
-qualifying structured technical-amendment record, successful revalidation, and
-successful validator evidence with `auto_continue: true`, invoke the previously
-approved digest-bound continuation directly. With `auto_continue: false`, clear
-the false wait only through the atomic transition and write nonblocking
-`resume_ready` with that exact continuation, without reapproval.
-This is the only direct-resume case. Multiple resume targets or a genuine
-product/authority decision require the user.
+When there is exactly one resume target and its `awaiting_user` wait has been
+confirmed cleared, resume the paused wave or task directly. Multiple resume targets
+or a genuine product/authority decision require the user.
 
 Ordinary session starts still only offer the next allowed public command; they
 do not auto-run it.

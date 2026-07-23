@@ -122,12 +122,10 @@ across interview and tech planning and stops after its compact approvals.
 Two modes:
 
 In both modes, the parent/root is the exclusive git index and commit writer.
-Workers return scoped diffs, verification results, and immutable non-terminal
-worker results. Only the parent validates ownership and gates, uses path-scoped staging
-for every implementation, fix, and evidence commit, and terminalizes
-the immutable run. Supporting projections and the immutable record are written first; the
-canonical current-run pointer is atomically replaced after validation. The pointer is
-written last.
+Workers return scoped diffs and verification results directly. Only the parent validates
+ownership and gates, uses path-scoped staging for every implementation, fix, and evidence
+commit, and records the task `done` in its frontmatter and in `checkpoint.yml` once the
+gates pass.
 
 #### Mode A: Single Task — `/do-task`
 
@@ -155,7 +153,7 @@ All tasks are executed through parent-orchestrated waves of isolated workers.
 - Executes tasks wave by wave:
   - Parent spawns bounded isolated workers with explicit role instructions and only the minimal task context, using the current runtime primitive
   - Workers run in parallel only for independent tasks with disjoint declared files; overlap is serialized and total active workers never exceed available slots
-  - Each worker follows its loaded skill, runs required verification, and returns its scoped diff plus immutable non-terminal worker-result evidence
+  - Each worker follows its loaded skill, runs required verification, and returns its scoped diff plus evidence directly to the parent
   - Parent coordinates reviewers, aggregates result artifacts, owns shared durable state, commits wave status, and updates `checkpoint.yml`; children do not use shared team state or nested fan-out
 - **Feature Audit Wave** (conditional and risk-based): use only the audit tasks selected by the catalog policy above. When multiple audits are selected, the parent uses bounded batches under the shared configured-cap/live-slot formula. Auditors write disjoint reports; the parent aggregates findings and coordinates bounded fix rounds. This is the only feature-level audit pass
 - **Ad-hoc workers**: when work outside planned tasks is required, parent assigns an explicit role, matching skill, minimal context, disjoint output, and reviewers based on work type
@@ -280,11 +278,10 @@ Agent uses Context7 MCP to fetch current library documentation instead of relyin
 
 ### Checkpoint Recovery
 Feature execution persists recovery metadata after each wave. `checkpoint.yml` and
-`decisions.md` provide routing and context only. After compaction, the parent resolves each
-canonical current-run pointer to its contained immutable approved run before selecting
-dependency-ready unfinished work. Immutable `runs/{run-id}.run.yml` records are terminal
-task evidence; `{task-id}.run.yml` is only the current pointer, and `feature-status.yml` is
-terminal evidence for the feature. Neither checkpoint nor decisions can prove completion.
+`decisions.md` provide routing and context only. After compaction, the parent confirms
+each task's recorded status in its frontmatter and in `checkpoint.yml` before selecting
+dependency-ready unfinished work. `feature-status.yml` is the terminal evidence for the
+feature. Neither checkpoint nor decisions.md can prove completion by itself.
 
 ---
 

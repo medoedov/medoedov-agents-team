@@ -158,17 +158,14 @@ After individual validation passes, run exactly **one cross-task pass**:
 ## Phase 3: Present to User
 
 1. Summary: task count, waves, dependencies, validation results (iterations, issues found/fixed).
-2. Obtain initial user approval before rendering approval fields.
-3. Render the complete immutable final approved manifest bytes to a same-directory temporary
-   file, including status, approval/amendment references, current task count, canonical task
-   paths/dependencies, file-map pointer, and immutable validation reports. Guard output is
-   external evidence and never appears in these bytes.
-4. Validate the staged physical bytes while binding the report to the logical canonical path:
+2. Obtain user approval before rendering the approval fields.
+3. Render the complete final manifest bytes (status, approval reference, current task count,
+   canonical task paths/dependencies, file-map pointer, and validation report paths) to a
+   same-directory temporary file.
+4. Validate the staged bytes while binding the report to the logical canonical path:
    `python .claude/shared/scripts/validate_tasks_manifest.py --project . --manifest work/{feature}/.tasks-manifest.final.tmp --logical-manifest work/{feature}/tasks-manifest.yml --report work/{feature}/logs/tasks/manifest-guard-{iteration}.json`.
-   Require exit 0, then atomically replace canonical with the IDENTICAL staged bytes. A nonzero
-   result leaves canonical bytes unchanged. There is no rerun, self-reference, or post-guard mutation.
-5. Store the immutable guard report ref and SHA-256 only in external checkpoint/approval-entrypoint
-   evidence, then invoke only the approval-owned continuation.
+   Require exit 0, then atomically replace canonical with the identical staged bytes. A nonzero
+   result leaves canonical bytes unchanged.
 5. Git commit: `chore(tasks): task decomposition approved for {feature}`
 6. Suggest `/do-task {task-id}` for one dependency-ready task or
    `/do-all-tasks` for parent-controlled feature execution.

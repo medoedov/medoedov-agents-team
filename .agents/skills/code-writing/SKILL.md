@@ -121,8 +121,7 @@ description: |
 
    Full-path task reviewers write result artifacts to
    `logs/working/task-{N}/{reviewer}-round{R}.json`. Direct and lean ordinary
-   reviewers return one bounded report without requiring a filesystem receipt
-   or immutable run chain.
+   reviewers return one bounded report and no separate on-disk receipt.
 
 5. **Process Findings**
 
@@ -147,17 +146,15 @@ description: |
    findings can be affected. Deduplicate findings by stable semantic identity.
    Review counting is exact: R1 runs all required reviewers; R2 runs only affected
    Critical/Major reviewers; R3 is reserved for the final integrated all-required-reviewers
-   gate (or R1 is final when clean). There is no R4; any finding after R3 routes to remediation.
+   gate (or R1 is final when clean). There is no R4; any finding after R3 goes to owner escalation.
 
    The unchanged full-path attempt remains capped at three rounds, with no
-   round 4. Return remaining findings to the parent for newly scoped
-   remediation tasks and manifest-guard revalidation. At most one generation exists per
-   `root_blocker_id`; descendants inherit generation 1/bounded path and cannot decompose again.
-   Same-root replacement failure after R3 is `technical-repair-exhausted`. User input is reserved
-   for a product or acceptance change, authority change, external or
-   destructive effect, unavailable required input or service, reviewer
-   conflict, or the same atomic root blocker after its bounded remediation
-   path is exhausted.
+   round 4. Return remaining findings to the parent for owner escalation per
+   `.claude/shared/pipeline-contract.md#review-rounds`: report what was tried
+   across all three rounds and let the owner choose to skip, halt, or supply
+   missing context. User input is reserved for a product or acceptance change,
+   authority change, external or destructive effect, unavailable required
+   input or service, or reviewer conflict.
 
 **Checkpoint:** List post-work steps completed.
 

@@ -70,9 +70,8 @@ After 2 failed retries, surface the 5th verdict line (🤔 `не успел пр
 
 Allowed without delegation: read-only inspection; parent-owned git
 status/diff/log/add/commit/push; spawning and supervising children; and direct
-orchestration writes to `checkpoint.yml`, `task-files-map.yml`, the canonical run
-pointer, immutable task run records, `feature-status.yml`, each spawn receipt, and
-`decisions.md`.
+orchestration writes to `checkpoint.yml`, `task-files-map.yml`,
+`feature-status.yml`, each spawn receipt, and `decisions.md`.
 application code, application tests, configuration, infrastructure, and other implementation artifacts remain delegated to `coder`.
 
 ## User-journey scenarios
@@ -153,7 +152,9 @@ Triggered reviewers are conditional and additive.
 
 Review counting is exact: R1 runs all required reviewers; R2 runs only affected
 Critical/Major reviewers; R3 is reserved for the final integrated all-required-reviewers gate
-(or R1 is final when clean). There is no R4, and any finding after R3 routes to remediation.
+(or R1 is final when clean). There is no R4. A Critical/Major finding still open after R3
+stops the loop and goes to the owner via the Retry failure protocol (skip / halt / add
+context) — never into an automatic fix cycle.
 Deduplicate findings by stable semantic identity before reporting counts.
 
 ## Dual-runtime orchestration contract
@@ -178,41 +179,21 @@ Tasks with overlapping write ownership are serialized. Missing ownership, accept
 artifact, test, or deadline blocks the spawn. The approved plan remains the product scope;
 decomposition does not authorize extra work.
 
-Before fresh execution or resume, run exactly
-`python .claude/shared/scripts/validate_tasks_manifest.py --project . --manifest work/{feature}/tasks-manifest.yml --report work/{feature}/logs/tasks/manifest-guard-{iteration}.json`
-and require exit 0; record its immutable report ref and SHA-256. When a legacy approved
-manifest fails atomicity or skill evidence, treat it as a pre-development gate
-regression: preserve existing WIP and evidence, create dependency-linked
-remediation tasks inside the approved objectives and acceptance, update
-task/file ownership, and revalidate. This recovery must not set
-`awaiting_user`; resume the approval-owned continuation after the manifest
-guard passes.
-
-### Post-approval amendment classifier
+### Post-approval changes
 
 The initial plan still requires explicit user approval. For any later edit to
 an approved task or plan artifact, apply
-`.claude/shared/pipeline-contract.md#post-approval-amendment-classification`.
-Do not restate its exhaustive classifier here.
+`.claude/shared/pipeline-contract.md#post-approval-changes`.
 
-The parent writes the canonical technical-amendment record, updates the
-checkpoint reference, re-reads current artifacts, verifies the base approval
-digest, allowed delta, objective trace, before/after acceptance digests, and
-terminal required-gate results, and only after successful no-clobber validator
-evidence plus its atomic checkpoint transition invokes the exact
-approval-owned continuation. Teammate blockers route to the parent for that
-classification.
+An ordinary technical repair that preserves the approved objective and
+acceptance remains within the task under the existing approval. Re-run only
+affected targeted checks and continue — no reapproval needed. A product/authority change
+returns to the user before mutation; a new high-risk trigger promotes the
+repair to the full path first.
 
 Runtime worker/reviewer retries, scheduling/capacity changes, and fixed-role
 fallbacks that preserve the bounded execution contract remain under
-`.claude/codex/runtime-contract.md`; do not create a technical-amendment record
-for them.
-
-An ordinary technical repair that preserves the approved objective and
-acceptance remains within the task. Re-run only affected targeted checks: no
-amendment hash, no amendment manifest, and no reapproval. A product/authority change
-still returns to the user; full-path and high-risk artifact amendments
-continue through the canonical classifier.
+`.claude/codex/runtime-contract.md`; they need none of the above.
 
 ### Runtime-neutral operations
 
@@ -311,16 +292,10 @@ Follow `.claude/codex/runtime-contract.md#approval-authority-and-native-permissi
 use `awaiting_user` only for conversational decisions. A native permission card belongs to
 the needing agent's native tool request, not to parent checkpoint state.
 
-On recovery, follow the canonical amendment reference and invoke
-`.claude/shared/scripts/validate_technical_amendment.py` against current
-artifacts. Only durable successful validator evidence lets the parent
-use the validator's atomic transition to set
-`cleared_reason: false_technical_approval_gate`, `cleared_at`, and
-`awaiting_user.active: false`, while binding the evidence reference/hash and
-clearing stale wait metadata. The parent directly resumes only when canonical
-`auto_continue` permits; otherwise it writes nonblocking `resume_ready` with
-the exact approval-owned continuation. It must not
-synthesize user approval. A free-form question alone never clears the wait.
+On recovery, the parent re-reads the checkpoint and the current repository state,
+confirms the question that set `awaiting_user.active: true` was actually answered,
+and only then clears the flag (`active: false`) and resumes the paused wave or task.
+It must not synthesize user approval or clear the wait from a free-form guess.
 
 ## Disjoint file check
 
@@ -357,7 +332,7 @@ Five failure modes have prescribed responses. Treat each as a contract, not a su
 - **Malformed output (schema validation fails):** re-spawn fresh with a stricter prompt and a worked example. Maximum one retry, then escalate.
 - **Reviewer conflict:** never auto-resolve. Surface both verdicts verbatim under the marker `конфликт ревьюверов, твой выбор:` followed by each reviewer name and verdict on its own line, then append a final line `Напиши «советник» или название другого ревьюера для своего выбора.` so the user knows the expected input format. Wait for the user's decision. (Applies to all multi-reviewer conflicts, not only advisor.)
 - **Coder reached round 3 on the same atomic attempt:** stop that loop; there is
-  no round 4. Apply the implementation remediation protocol below.
+  no round 4. Apply the retry failure protocol below.
 
 ### Rate-limit handling
 
@@ -379,33 +354,35 @@ last incomplete wave. After resuming, clear `stall_state.active` and record the 
 
 ## Retry failure protocol
 
-After three failed rounds, preserve the unchanged attempt loop and its evidence.
-For a legacy non-atomic task, group unresolved themes into newly scoped
-remediation tasks, update dependencies and file ownership, revalidate with the
-manifest guard, and resume automatically. There is at most one remediation generation per
-`root_blocker_id`: all replacements/descendants inherit the root with `generation: 1` and
-`bounded_path_used: true`, and descendant decomposition is forbidden. Same-root failure after
-replacement R3 is `technical-repair-exhausted`; the source loop is not reset or relabeled.
+After three failed review-and-fix rounds on the same task, halt that loop and present
+structured options. Silent skip is forbidden; hard stop without explanation is forbidden.
 
-Set `awaiting_user.active: true` only for a product or acceptance change,
-authority change, external or destructive effect, unavailable required input
-or service, reviewer conflict, or the same atomic root blocker after the
-bounded remediation path is exhausted with no safe alternative. Preserve all
-security, QA, deploy, permission, immutable evidence, and final integration
-gates; no user approval can override unresolved security findings.
+```
+Task T-<id> (<name>) failed 3 times.
+Attempts:
+  1. <reason>
+  2. <change + reason>
+  3. <change + reason>
+Root cause hypothesis: <hypothesis>
+Options:
+  A) Skip — continue feature, list at end
+  B) Stop — halt feature for manual debugging
+  C) More context: <specific question> — retry with input
+```
+
+Record `awaiting_user.active: true` with the question and affected tasks.
+Wait for the user's choice before proceeding. Preserve all security, QA, deploy,
+permission, and final integration gates while waiting; no user approval can override
+unresolved security findings.
 
 ## Product/authority escalation triggers
 
-These user-owned triggers are disjoint from the execution failure protocols.
-Apply
-`.claude/shared/pipeline-contract.md#post-approval-amendment-classification`.
-When it returns `product/authority amendment`, the parent records the
-structured decision reference in `awaiting_user` and asks the user. When it
-returns a validated technical amendment with permitted continuation, the
-parent requires
-`.claude/shared/scripts/validate_technical_amendment.py` no-clobber validator
-evidence and atomic transition, then consumes its bound evidence hash; it does
-not create a conversational wait.
+Escalate to the user on exactly these conditions, disjoint from the retry failure
+protocol and the other execution failure protocols above: a product or acceptance
+change, an authority change, an external or destructive effect, or an unavailable
+required input or service.
+Set `awaiting_user.active: true` with the question and affected tasks, and clear it the
+instant the user replies.
 
 Do not interrupt the user for: each agent spawn, internal technical choices (pattern, naming, fixture), or mid-wave decisions. Rationale: the user owns the product; Team Lead owns the technical execution. Escalation is trigger-based, not timer-based or per-step.
 

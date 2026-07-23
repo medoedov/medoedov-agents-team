@@ -56,9 +56,8 @@ snapshot rather than shared inbox access. `completed`, `idle`, `running`, and
 
 Read only the feature in scope:
 
-- `work/{feature}/logs/checkpoint.yml`;
-- canonical `{task-id}.run.yml` records;
-- reviewer reports explicitly expected by task/run state; and
+- `work/{feature}/logs/checkpoint.yml`, including recorded task status;
+- reviewer reports explicitly expected by that recorded task status; and
 - feature-local filesystem activity obtainable through one of the four
   permitted command patterns.
 

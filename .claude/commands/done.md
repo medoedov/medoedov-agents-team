@@ -26,8 +26,7 @@ Read these files from the feature directory:
 1. `user-spec.md` — what was planned
 2. `tech-spec.md` — how it was implemented
 3. `decisions.md` — what decisions were made during implementation
-4. `tasks-manifest.yml`, task current-run pointers with their immutable run records, and
-   `feature-status.yml` — durable lifecycle evidence
+4. `tasks-manifest.yml` and `feature-status.yml` — durable lifecycle evidence
 
 If `decisions.md` is missing or sparse, use `git log --oneline` for feature-related commits to understand what changed.
 
@@ -37,8 +36,7 @@ If `decisions.md` is missing or sparse, use `git log --oneline` for feature-rela
 - `qa: passed`
 - `unresolved_findings: 0`
 - `post_deploy: passed`, or `post_deploy: waived` with an explicit durable waiver when post-deploy is applicable but intentionally waived
-- every task in the approved manifest has a validated `{task-id}.run.yml` pointer that
-  resolves to the latest approved non-superseded immutable run with `final_status: done`
+- every task in the approved manifest is recorded `done` in its frontmatter and in `checkpoint.yml`
 
 Missing, malformed, stale, or contradictory evidence stops `/done` before Project Knowledge edits or archival. An owner request to stop or finalize incomplete work may be recorded as `status: aborted` with explicit `waived` gate metadata where appropriate, but it must not be represented as completed and must not be archived under `work/completed/`.
 
@@ -80,7 +78,7 @@ Before moving, check for a destination collision:
 
 - [ ] Documentation-writing skill loaded
 - [ ] Feature artifacts read and understood
-- [ ] `feature-status.yml` and every resolved immutable task run passed the strict completion gate
+- [ ] `feature-status.yml` and every task's recorded `done` status passed the strict completion gate
 - [ ] Incomplete override, if any, recorded as aborted/waived and never represented as completed
 - [ ] PK files updated (only affected ones)
 - [ ] Destination collision check passed and archive was atomic/idempotent

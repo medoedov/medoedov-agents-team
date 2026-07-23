@@ -20,16 +20,16 @@ Feature execution is full-path only and does not implement a lean workflow.
 Direct and lean paths execute through `/write-code` with ordinary single-turn
 coder/reviewer calls and parent aggregation.
 
-An already-approved full-path ordinary technical repair that preserves the approved
-objective, acceptance, scope, and risk stays in the current task. Re-run only affected targeted checks:
-no amendment hash, no amendment manifest, and no reapproval. A
+An already-approved full-path ordinary technical repair that preserves the approved objective,
+acceptance, scope, and risk stays in the current task under the existing approval. Re-run only
+affected targeted checks and continue — no reapproval needed. A
 product/authority or scope change stops for the user. New high risk promotes
 before mutation. The repair retains all full-path security, QA, and terminal gates.
 
 **You CAN:**
 - Read task frontmatter (limit=15 lines) to check status and metadata
 - Read decisions.md to track progress
-- Read `tasks-manifest.yml`, `task-files-map.yml`, current-run pointers with their immutable records, and `feature-status.yml` to enforce lifecycle gates
+- Read `tasks-manifest.yml`, `task-files-map.yml`, and `feature-status.yml` to enforce lifecycle gates
 - Run git commands (status, diff, log, add, commit)
 - Spawn and message agents
 - Update parent-owned `checkpoint.yml` and `feature-status.yml`
@@ -37,7 +37,7 @@ before mutation. The repair retains all full-path security, QA, and terminal gat
 The parent/root is the exclusive git index and commit writer. Workers return a
 scoped changed-file inventory, diff, and verification results; after validating
 ownership and gates, the parent uses path-scoped staging and creates the
-corresponding implementation, review-fix, evidence, or wave commit.
+corresponding implementation, review-fix, or wave commit.
 
 **You CANNOT:**
 - Read full task files (teammates do this)
@@ -57,15 +57,6 @@ Before creating an execution plan or resuming work, require all of the following
   present only for a broad refactor or after code-reviewer flags complexity or
   readability.
 - The feature-audit task set matches the [catalog policy](../tech-planning/references/skills-and-reviewers.md#risk-based-feature-audit-policy), and the Final Wave contains mandatory QA.
-
-Before fresh execution or resume, run exactly
-`python .claude/shared/scripts/validate_tasks_manifest.py --project . --manifest work/{feature}/tasks-manifest.yml --report work/{feature}/logs/tasks/manifest-guard-{iteration}.json`
-and require exit 0; record its immutable report ref and SHA-256. A legacy approved manifest
-that fails atomicity or skill evidence is a pre-development gate regression.
-Preserve existing WIP and evidence, partition the affected task into
-dependency-linked remediation tasks within the already approved objectives and
-acceptance, update task/file ownership, and rerun the manifest guard. This
-recovery must not set `awaiting_user`.
 
 If any input is missing, malformed, stale, or contradictory, fail closed before mutation and report the unmet gate.
 Empty reviewers on a `code-writing` task fail closed; required `code-reviewer`
@@ -97,10 +88,10 @@ same bounded envelope. If no selector is available, record model binding as `uns
 `unverified`.
 
 Codex uses a single-turn spawn with no filesystem receipt for ordinary
-low-risk coder and read-only reviewer work. Authorization handshakes and
-parent-owned spawn receipts remain for privileged/destructive/high-risk
-effects and matching lifecycle gates. Follow the runtime contract for the
-exact boundary.
+low-risk coder and read-only reviewer work. The authorization handshake and
+parent-owned spawn receipt in `.claude/codex/privileged-roles.md` apply only
+to privileged/destructive/high-risk effects and matching lifecycle gates.
+Follow the runtime contract for the exact boundary.
 
 For fixed-role model fallback and native permission, follow
 `.claude/codex/runtime-contract.md#approval-authority-and-native-permission`; the worker,
@@ -112,54 +103,11 @@ isolated spawn failed; or required implementation/review evidence is absent. Lac
 runtime model selector by itself is not a role-binding failure and does not reduce the
 mandatory implementation, review, security, deployment, QA, or terminal gates.
 
-### Immutable run and pointer gate
-
-Each completed task has an immutable terminal run record at
-`work/{feature}/logs/working/task-{task-id}/runs/{run-id}.run.yml`. It requires
-`run_id`, matching task ID, `approval_status: approved`, `final_status: done`,
-evidence, and optional `supersedes:`. `Final_status: done` is immutable: never
-overwrite a terminal record.
-
-`work/{feature}/logs/working/task-{task-id}/{task-id}.run.yml` is the atomically
-replaced canonical current-run pointer, not terminal source of truth. It contains
-`current_run_id`, `current_run_path`, `projected_status`, and `evidence_digest`.
-
-Every dependency, resume, and projection gate must validate path containment
-under the same task's `runs/` directory, require the immutable record's run_id
-matches the pointer and task ID, and require its evidence digest matches the
-pointer. Enumerate the contained run records and follow the supersedes chain to
-the latest approved non-superseded run; reject traversal, symlinks, cycles,
-missing ancestors, multiple leaves, or a pointer to another run.
-
-The parent owns the monotonic marker protocol. It writes supporting and
-projection artifacts first, writes and verifies the immutable terminal run
-record, then atomically replaces the canonical current-run pointer. The pointer
-is written last. On a pre-pointer interruption, the new run remains unselected
-and readers continue using the old valid pointer; recovery never edits a
-terminal record. Incomplete projections are repaired idempotently from the
-resolved immutable run.
-
 0. Check `work/{feature}/logs/checkpoint.yml`:
-   - Before treating `awaiting_user.active: true` as a real user wait, follow
-     its structured `amendment_ref`. Invoke
-     `.claude/shared/scripts/validate_technical_amendment.py` against the
-     current execution plan, amendment, checkpoint, immutable gate manifest,
-     ledger, classification evidence, and terminal gate evidence. Require its
-     no-clobber validator evidence and atomic checkpoint transition before
-     consuming the bound evidence reference/hash. That transition alone sets
-     `cleared_reason: false_technical_approval_gate`, `cleared_at`, and
-     `active: false`. When the projection has canonical
-     `auto_continue: true`, invoke only its exact digest-bound `continuation`.
-     When it is false, preserve that continuation in nonblocking
-     `resume_ready` without reapproval. It must not synthesize user approval or
-     clear from the question.
    - `last_completed_wave > 0` → this is a resume after context compaction.
      Read checkpoint, then read `work/{feature}/decisions.md` to confirm what was actually completed.
-     For tasks in the resumed wave, resolve the canonical current-run pointer
-     `work/{feature}/logs/working/task-{task-id}/{task-id}.run.yml`. Skip a task only when its
-     validated immutable current record says `final_status: done` and required evidence is present.
-     Checkpoint is not terminal proof. decisions.md is not terminal proof. Reconcile the checkpoint
-     against resolved immutable current runs, then resume only dependency-ready unfinished tasks.
+     Skip a task in the resumed wave only when its frontmatter and checkpoint both already
+     say `done`; re-run every task the checkpoint does not confirm.
      Report to user: "Resuming from wave {N}. Waves 1-{N-1} completed."
      Also check stall_state in checkpoint:
      - If `stall_state.active == true AND reset_at <= now` -> resume mode.
@@ -167,10 +115,11 @@ resolved immutable run.
        Clear stall_state after successful re-spawn (set active: false).
      - If `stall_state.active == true AND reset_at > now` -> rate-limit window not elapsed.
        Report to user: "Rate-limit window not yet elapsed. Resume at {reset_at}."
-   - `last_completed_wave: 0` is fresh only when no active or canonical execution evidence exists.
-     Reconcile all task run records, spawn receipts, and worker
-     results first. If wave-1 evidence exists, resume without spawning duplicate workers,
-     even though the supporting checkpoint still says zero.
+   - `last_completed_wave: 0` is fresh only when no already-produced execution evidence
+     (a scoped diff, a written report, a test result, or a checkpoint/wave entry) exists.
+     Reconcile completed task status and worker results first. If wave-1 evidence exists,
+     resume without spawning duplicate workers, even though the supporting checkpoint still
+     says zero.
 
 1. Read `work/{feature}/tech-spec.md` and `work/{feature}/user-spec.md`
 2. Read frontmatter of all task files in `work/{feature}/tasks/` — extract fields:
@@ -187,17 +136,12 @@ resolved immutable run.
    Build waves by the `wave` field as candidate concurrency groups. Within a wave, only tasks with disjoint writes from `task-files-map.yml` may run in parallel; file overlap forces serialization.
 
 3. Build the execution plan following
-   `.claude/shared/work-templates/execution-plan.md.template`. Before approval,
-   write an immutable amendment gate manifest whose exact allowed gate IDs map
-   to every approved objective/task; record its project-relative reference and
-   exact byte SHA-256 in `execution_approval`.
+   `.claude/shared/work-templates/execution-plan.md.template`.
 4. Save to `work/{feature}/logs/execution-plan.md`
 5. Show plan to user, wait for approval
-6. Only after explicit user approval, initialize the parent-owned checkpoint
-   and scheduling state. Store only the digest-bound
-   `execution_approval_projection`; every canonical approval field must match
-   the plan and the projection digest must validate. Do not start workers
-   before approval.
+6. Only after explicit user approval, record `status: approved` with `approved_at`
+   and `owner_ref` in the execution plan frontmatter, then initialize the
+   parent-owned checkpoint and scheduling state. Do not start workers before approval.
 7. Determine current runtime capacity. This project has a configured cap of five. Compute
    `confirmed free children = min(configured cap - current active agents (including root),
    live runtime reported free child slots, explicitly named workload-specific cap)`.
@@ -208,33 +152,22 @@ No nested fan-out: only the parent schedules workers and reviewers. A child work
 
 **Checkpoint:** execution plan explicitly approved, inputs validated, capacity bounded, checkpoint initialized.
 
-### Post-approval amendment handling
+### Post-approval changes
 
 After the initial approval checkpoint, apply
-`.claude/shared/pipeline-contract.md#post-approval-amendment-classification`
-only when an already-approved task or plan artifact changes. Do not duplicate
-the exhaustive classifier here.
-
-For a technical result, the parent writes the canonical amendment record,
-updates the affected task/plan artifacts and file map, persists the stable
-repair-loop ledger record, runs every recorded required gate, then invokes
-`.claude/shared/scripts/validate_technical_amendment.py` with its atomic
-transition. Only the parent may consume its successful validator evidence
-reference/hash, clear `awaiting_user`, set `resume_ready`, or invoke the
-approval-owned continuation. A child must not classify, clear, or resume. A
-product/authority result returns to the user. Implementation review exhaustion
-follows the bounded remediation path below before it may become
-`technical-repair-exhausted`.
+`.claude/shared/pipeline-contract.md#post-approval-changes` only when an
+already-approved task or plan artifact changes. An ordinary technical repair
+stays inside the task under the existing approval and re-runs only affected
+targeted checks — no reapproval needed. A product/authority result returns
+to the user before mutation.
 
 Runtime worker/reviewer retries, scheduling/capacity adjustments, and
 fixed-role fallback that preserve the same execution contract remain under
-`.claude/codex/runtime-contract.md`; do not create a technical-amendment record
-for them.
+`.claude/codex/runtime-contract.md` and need none of the above.
 
 ## Phase 2: Execute Wave
 
-1. Find dependency-ready tasks for the current wave whose resolved immutable current run
-   does not record `final_status: done`.
+1. Find dependency-ready tasks for the current wave that are not already recorded `done`.
 2. Use `task-files-map.yml` to compare declared writes before scheduling. Any file overlap requires the parent to serialize those tasks even when they share a wave; only disjoint tasks may run concurrently.
 3. Mark the selected tasks active in parent-owned state, then schedule workers and required reviewers without exceeding available slots:
 
@@ -255,22 +188,11 @@ for them.
 
    {reviewers_block}
 
-   Before yielding, process all review evidence supplied for this round and report any unresolved blocker.
-
-   After implementation or a fix attempt:
-   - Write one unique non-terminal worker-result artifact at
-     {feature_dir}/logs/working/task-{task-id}/{task-id}.worker-result-{attempt-id}.yml.
-      Include changed files, scoped diff, tests and smoke evidence, unresolved blockers,
-      and the role-source path. Privileged/high-risk runs also include the
-      non-authoritative heading/version acknowledgement plus `receipt_id` and
-      `receipt_path` copied from the parent-owned spawn receipt. Ordinary runs
-      omit receipt fields. Selector acceptance/failure, agent_type binding, and
-      source/envelope validation remain parent-owned.
-   - The worker MUST NOT write task frontmatter, immutable `runs/{run-id}.run.yml`, the
-     canonical current-run pointer `{task-id}.run.yml`, decisions.md, checkpoint.yml, or
-     feature-status.yml. Those are parent-owned shared or terminal state.
-   - Return the worker-result path and evidence summary to the parent. The artifact is
-     non-terminal and the message itself is not completion proof.
+   After implementation or a fix attempt, return to the parent: the changed-file
+   inventory, full diff, tests and smoke evidence, unresolved blockers, and the
+   role-source path you followed. You MUST NOT write task frontmatter,
+   decisions.md, checkpoint.yml, or feature-status.yml — those are parent-owned
+   shared state.
 
    Feature dir: {feature_dir}
    ```
@@ -287,13 +209,12 @@ for them.
    3. Reviewers write canonical reports to `{feature_dir}/logs/working/task-{task-id}/{reviewer}-round{N}.json`; the parent collects the report paths.
    4. Apply parent-routed findings. After fixes, return an updated diff for the next bounded round.
    5. This unchanged task attempt is capped at three rounds; there is no round
-      4. Unresolved findings then enter parent-owned remediation routing.
+      4. Unresolved findings after round 3 go to the parent for escalation.
 
    Review counting is exact: R1 runs all required reviewers; R2 runs only affected
    Critical/Major reviewers; R3 is reserved for the final integrated all-required-reviewers
-   gate (or R1 is final when clean). There is no R4; any finding after R3 routes to remediation.
-   The parent deduplicates findings by stable semantic identity.
-   The full-path lifecycle is capped at three rounds.
+   gate (or R1 is final when clean). There is no R4; the parent deduplicates findings by
+   stable semantic identity. The full-path lifecycle is capped at three rounds.
 
    Round synchronization: the parent waits for all required R(N) reports before scheduling R(N+1).
    Missing evidence is a blocker; the parent decides whether to retry, replace a reviewer, or escalate.
@@ -308,8 +229,8 @@ for them.
    For other skills, omission is valid only when that skill explicitly allows omission and
    names its default reviewers, or when the approved task explicitly identifies the worker
    as the review (for example, a selected audit task). Then skip reviewer scheduling. The
-   worker completes declared checks and returns its unique non-terminal result; only the
-   parent/root may write canonical or shared state.
+   worker completes declared checks and returns its result directly; only the
+   parent/root may write shared state.
 
    **Each reviewer** (when present) — the parent schedules a bounded single review round with the reviewer role declared by the task. Reviewers do not spawn workers or mutate shared lifecycle state.
 
@@ -327,16 +248,14 @@ for them.
    3. Return the report path to the parent; do not append shared state or spawn another agent.
    ```
 
-4. The parent waits for the bounded set of active workers/reviewers, aggregates the unique
-   worker-result artifacts and disjoint reviewer reports, and schedules further disjoint
-   work only when slots become available. A worker message saying "Task complete" is
-   advisory and a worker-result is explicitly non-terminal.
-5. Only the parent/root validates the worker-result, tests, acceptance criteria, binding
-   evidence, and reviewer reports. It then executes the monotonic marker protocol through
-   the immutable run and pointer gate above.
-   Reviewer-created reports remain immutable evidence that the parent verifies; the parent
-   does not rewrite them. Later revision allocates a new `run_id`, writes a distinct immutable
-   record with `supersedes: <prior-run-id>`, and updates the pointer only after validation.
+4. The parent waits for the bounded set of active workers/reviewers, aggregates the returned
+   diffs and disjoint reviewer reports, and schedules further disjoint work only when slots
+   become available. A worker message saying "Task complete" is advisory, not completion proof.
+5. Only the parent/root validates the returned diff, tests, acceptance criteria, and reviewer
+   reports. When they pass, the parent stages and commits the change, sets the task's
+   frontmatter `status: done`, records it in `checkpoint.yml`, and appends a `decisions.md`
+   entry. Reviewer-created reports remain immutable evidence that the parent verifies; the
+   parent does not rewrite them.
 
 ### Feature Audit Wave tasks
 
@@ -358,7 +277,7 @@ Each scheduled auditor:
 - Returns the report path and summary; the parent writes any shared decisions.md entry
 
 After all scheduled audit reports:
-- All clean and each audit task's resolved immutable current run says `final_status: done` with its report linked → proceed to Final Wave
+- All clean and each audit task is recorded `done` with its report linked → proceed to Final Wave
 - Issues found → spawn a fixer with `code-writing` and `code-reviewer`; add
   `code-simplifier` only for flagged complexity/readability or a broad
   refactor, and add the auditor that found the issue when its trigger matches.
@@ -375,24 +294,24 @@ When lead spawns an agent outside the original execution plan (to fix audit find
    - Deploy/CI changes → skill: `deploy-pipeline`, reviewers: deploy-infra-reviewer
    - Infrastructure changes → skill: `infrastructure-setup`, reviewers: deploy-infra-reviewer, security-auditor
    - Other tasks (research, config, manual steps) → no skill, no reviewers. Agent follows lead's instructions directly.
-2. The ad-hoc agent writes a unique non-terminal worker-result and returns it; the parent
-   validates the evidence and writes any shared decisions.md entry
+2. The ad-hoc agent returns its diff/result directly to the parent; the parent
+   validates the evidence and writes any shared decisions.md entry.
 3. Standard review protocol: agent returns a diff → parent stages/commits by path → reviewers
    inspect → agent fixes → max 3 rounds
-4. The parent verifies the resolved immutable current run says `final_status: done` with required evidence. A decisions.md entry remains supporting context only.
+4. The parent records the task `done` with required evidence once the review and test gates pass.
 
-**Checkpoint:** all scheduled work returned, but tasks advance only when resolved immutable runs and evidence pass the completion gate.
+**Checkpoint:** all scheduled work returned, but tasks advance only when their evidence passes the completion gate.
 
-### Implementation remediation
+### Escalation after round 3
 
-After round 3, preserve the source loop and its immutable evidence. For a
-legacy non-atomic task, group unresolved themes into newly scoped remediation
-tasks, update dependencies and file ownership, revalidate the changed
-decomposition with the manifest guard, and resume automatically under the
-existing approval. There is at most one remediation generation per `root_blocker_id`.
-Every replacement and descendant inherits that root with `generation: 1` and
-`bounded_path_used: true`; descendant decomposition is forbidden. Same-root failure after
-replacement R3 is `technical-repair-exhausted`; the source loop is not reset.
+After round 3, unresolved Critical/Major findings stop that task's review loop.
+Preserve the diff, tests, and reviewer reports already produced, then escalate
+to the owner with the finding history across all three rounds, a root-cause
+hypothesis, and the same options as the retry failure protocol in
+`.claude/team-lead.md` (skip, halt, or supply missing context). Record
+`awaiting_user.active: true` with the question and affected tasks. Do not silently
+skip a finding and do not route it into another fix round without the owner's
+decision.
 
 An environment/deferred-evidence blocker (unmet
 engine/image/credential/network/live-access precondition) escalates to the
@@ -400,25 +319,17 @@ user on first fail-closed confirmation per the runtime-contract section
 Bounded fail-closed escape and blocker classification — it is never
 grouped into a remediation task or a coder fix-round.
 
-Set `awaiting_user.active: true` only for a product or acceptance change,
-authority change, external or destructive effect, unavailable required input
-or service, reviewer conflict, or the same atomic root blocker after the
-bounded remediation path is exhausted with no safe alternative. Security, QA,
-deploy, permission, immutable evidence, and final integration gates remain;
-no user approval can override unresolved security findings.
-
 ## Phase 3: Wave Transition
 
-1. For every task in the wave, resolve
-   `work/{feature}/logs/working/task-{task-id}/{task-id}.run.yml` through the immutable-run
-   gate and require the selected record to say `final_status: done` plus required evidence.
-2. Treat task frontmatter, commits, messages, checkpoint data, and decisions as supporting context only. Checkpoint is not terminal proof. decisions.md is not terminal proof.
-3. If a run record or required evidence is missing, failed, contradictory, or stale, keep the task incomplete and route it back to its worker or escalate. Do not advance the wave.
-4. When every run record passes, the parent may reflect status in task metadata and commit the wave evidence: `chore: complete wave {N} — record terminal task evidence`.
+1. For every task in the wave, confirm its frontmatter `status: done` and its checkpoint
+   entry agree, with reviewer reports and test evidence linked.
+2. Treat commits, messages, and decisions.md as supporting context only.
+3. If a task's evidence is missing, failed, contradictory, or stale, keep the task incomplete and route it back to its worker or escalate. Do not advance the wave.
+4. When every task in the wave is confirmed, the parent may commit the wave evidence: `chore: complete wave {N} — record terminal task evidence`.
 5. Update the parent-owned `work/{feature}/logs/checkpoint.yml` with `last_completed_wave` and `next_wave`; this supports resume but cannot replace canonical task evidence.
 6. Before starting the next wave, revalidate dependencies, file ownership, and available slots, then return to Phase 2.
 
-**Checkpoint:** all wave tasks have terminal run records with evidence; supporting state is committed and checkpoint updated.
+**Checkpoint:** all wave tasks are recorded `done` with evidence; supporting state is committed and checkpoint updated.
 
 ## Phase 4: User Review
 
@@ -427,11 +338,9 @@ All planned waves are done, including the optional risk-based Feature Audit Wave
 1. Show results: what was built, key decisions, QA report summary
 2. Describe what to check manually (from execution plan "user checks" section)
 3. Issues found → fix → review → parent path-scoped commit (max 3 rounds). If unresolved → escalate (see Escalation).
-4. The parent verifies every task pointer resolves to an immutable run with
-   `final_status: done`, QA passed, unresolved findings equal zero, and post-deploy
+4. The parent verifies every task is recorded `done`, QA passed, unresolved findings equal zero, and post-deploy
    verification passed or was explicitly waived when applicable.
-5. Only after those gates pass, finish every task-level monotonic marker protocol and repair
-   any projections, then persist all feature supporting evidence. `feature-status.yml` is written last
+5. Only after those gates pass, `feature-status.yml` is written last
    with `status: complete`, QA, unresolved-finding, post-deploy, and evidence
    references. This durable file is the terminal feature proof; checkpoint and decisions
    are not.
@@ -439,11 +348,10 @@ All planned waves are done, including the optional risk-based Feature Audit Wave
 
 ## Escalation
 
-Apply
-`.claude/shared/pipeline-contract.md#post-approval-amendment-classification`.
-Call the user only for its product/authority result, a structured
-`technical-repair-exhausted` result after the bounded remediation path, the
-existing reviewer-conflict protocol, or a confirmed
+Apply `.claude/shared/pipeline-contract.md#post-approval-changes` and
+`.claude/shared/pipeline-contract.md#review-rounds`.
+Call the user for a product/authority change, unresolved Critical/Major findings after
+round 3, the existing reviewer-conflict protocol, or a confirmed
 environment/deferred-evidence blocker (below). Route a teammate blocker to
 the parent first; the child does not classify or escalate it directly.
 
@@ -454,14 +362,14 @@ Bounded fail-closed escape and blocker classification — it is never
 grouped into a remediation task or a coder fix-round.
 
 When escalation criteria are met, preserve the blocked task/wave, report the
-three-round and remediation evidence, record the unresolved stable blocker in
+three-round evidence, record the unresolved stable blocker in
 decisions.md, and wait for the specific user-owned decision.
 
 ## Self-Verification
 
 - [ ] Execution plan created and approved
 - [ ] Approved `tasks-manifest.yml` and complete `task-files-map.yml` validated
-- [ ] Every `{task-id}.run.yml` pointer resolves to an immutable approved run with `final_status: done` and required evidence
+- [ ] Every task is recorded `done` in frontmatter and `checkpoint.yml` with required evidence
 - [ ] File overlaps serialized; available slots respected; no nested fan-out
 - [ ] Every code change completed code-reviewer; code-simplifier ran only when triggered
 - [ ] Feature-audit selection matched the catalog policy, and any selected audits completed in batches bounded by live runtime availability
