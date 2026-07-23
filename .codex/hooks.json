@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/checkpoint_context.py\" session-start",
+            "command_windows": "powershell.exe -NoProfile -NonInteractive -Command \"$ErrorActionPreference = 'Stop'; $root = (& git rev-parse --show-toplevel).Trim(); & python (Join-Path $root '.codex/hooks/checkpoint_context.py') 'session-start'; exit $LASTEXITCODE\"",
+            "statusMessage": "Checking resumable feature work"
+          }
+        ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/checkpoint_context.py\" post-compaction",
+            "command_windows": "powershell.exe -NoProfile -NonInteractive -Command \"$ErrorActionPreference = 'Stop'; $root = (& git rev-parse --show-toplevel).Trim(); & python (Join-Path $root '.codex/hooks/checkpoint_context.py') 'post-compaction'; exit $LASTEXITCODE\"",
+            "statusMessage": "Surfacing durable checkpoint context"
+          }
+        ]
+      }
+    ]
+  }
+}

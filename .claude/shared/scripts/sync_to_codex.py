@@ -14,9 +14,13 @@ import os
 import re
 import sys
 import tempfile
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11 — README documents a >=3.10 minimum.
+    import tomli as tomllib  # type: ignore[no-redef]
 
 
 # Shipped-runtime consumer contract (architect F8; extended by architect
